@@ -9,6 +9,9 @@ import {
   uniqueProjectName,
   type ProjectSummary,
 } from '../persist/db'
+import { usePanels } from '../state/panels'
+import { saveCurrent, writeProject } from '../state/saveCurrent'
+import { switchToProject } from '../state/switchProject'
 import { useStore } from '../state/store'
 import { defaultDsl } from '../templates/patterns'
 import { useDismiss } from './useDismiss'
@@ -44,36 +47,25 @@ export function ProjectMenu({ onToast }: { onToast: (m: string) => void }) {
   const refresh = async () => setProjects(await listProjects())
 
   /** Write the open project synchronously, ahead of any switch. */
-  const flush = async () => {
-    if (!projectId) return
-    const existing = await loadProject(projectId)
-    await saveProject({
-      version: 1,
-      id: projectId,
-      name: projectName,
-      dsl: text,
-      createdAt: existing?.createdAt ?? new Date().toISOString(),
-      savedAt: new Date().toISOString(),
-    })
-  }
+  const flush = saveCurrent
 
   const switchTo = async (id: string) => {
     if (id === projectId) {
       setOpen(false)
       return
     }
-    await flush()
-    const target = await loadProject(id)
-    if (!target) {
+    // Flush, load, and re-point the workspace at the new project's documents —
+    // all three, in that order. `switchProject` owns the sequence because the
+    // file explorer does the same thing.
+    const opened = await switchToProject(id)
+    if (!opened) {
       onToast('That project could not be read.')
       await refresh()
       return
     }
-    openProject(target)
-    await setCurrentProjectId(id)
     await refresh()
     setOpen(false)
-    onToast(`Opened “${target.name}”`)
+    onToast(`Opened “${opened.name}”`)
   }
 
   const create = async (dsl: string, baseName: string) => {
@@ -83,6 +75,7 @@ export function ProjectMenu({ onToast }: { onToast: (m: string) => void }) {
     await saveProject(project)
     await setCurrentProjectId(project.id)
     openProject(project)
+    usePanels.getState().rebaseTo(project.id)
     await refresh()
     setOpen(false)
     onToast(`Created “${project.name}”`)
@@ -103,12 +96,14 @@ export function ProjectMenu({ onToast }: { onToast: (m: string) => void }) {
     const next = all[0] ? await loadProject(all[0].id) : null
     if (next) {
       openProject(next)
+      usePanels.getState().rebaseTo(next.id)
       await setCurrentProjectId(next.id)
     } else {
       const fresh = makeProject('Untitled', defaultDsl())
       await saveProject(fresh)
       await setCurrentProjectId(fresh.id)
       openProject(fresh)
+      usePanels.getState().rebaseTo(fresh.id)
       setProjects(await listProjects())
     }
     onToast(`Deleted “${target.name}”`)
@@ -182,10 +177,7 @@ export function ProjectMenu({ onToast }: { onToast: (m: string) => void }) {
           onClose={() => setRenaming(false)}
           onSave={async (name) => {
             renameProject(name)
-            if (projectId) {
-              const existing = await loadProject(projectId)
-              if (existing) await saveProject({ ...existing, name, savedAt: new Date().toISOString() })
-            }
+            if (projectId) await writeProject(projectId, name, text)
             await refresh()
             setRenaming(false)
             onToast(`Renamed to “${name}”`)

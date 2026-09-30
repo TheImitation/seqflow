@@ -88,8 +88,10 @@ body {
   min-height: 0;
 }
 
-/* The inspector is a fixed-width sibling of the pane area, not one of the
-   fractional panes — so resizing panes never fights it for space. */
+/* The explorer is a fixed-width sibling of the dock rather than a pane inside
+   it: it is how documents are reached, so docking it in the thing it navigates
+   would let it be closed out from under itself. Resizing panes never fights it
+   for space. */
 .workspace {
   display: flex;
   flex: 1;
@@ -2309,4 +2311,180 @@ input.invalid:focus {
   border-radius: 3px;
   background: var(--surface-3);
   color: var(--text-faint);
+}
+
+/* -------------------------------------------------------------- explorer */
+
+/* A fixed column, not a dock pane — see the note on `.workspace`. */
+.explorer {
+  flex: 0 0 214px;
+  min-width: 0;
+  border-right: 1px solid var(--border);
+}
+
+.explorer .pane-body {
+  padding: 4px 0 10px;
+}
+
+.explorer-count {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+}
+
+.explorer-empty {
+  margin: 10px 12px;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.explorer-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+/* One grid for both row kinds, so a file's name lines up under its folder's
+   however long either gets. */
+.explorer-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 24px;
+  padding: 0 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.explorer-row:hover {
+  background: var(--surface-1);
+}
+
+.explorer-row.project {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.explorer-row .twisty {
+  flex: 0 0 10px;
+  color: var(--text-faint);
+  font-size: 9px;
+}
+
+.explorer-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A file row is a pair of buttons, so the row itself is the flex container and
+   the label button takes the space. */
+.explorer-row.file {
+  padding: 0 4px 0 22px;
+  gap: 0;
+}
+
+.explorer-open {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 4px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.explorer-open .explorer-label {
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+
+/* Open, and the one the chrome is bound to. A derived file is dimmed the way an
+   editor dims build output. */
+.explorer-row.file.open {
+  color: var(--text);
+}
+.explorer-row.file.active {
+  background: var(--surface-2);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.explorer-row.file.derived .explorer-label {
+  color: var(--text-faint);
+}
+.explorer-row.file.open.derived .explorer-label {
+  color: var(--text-dim);
+}
+
+/* Unsaved. The same dot the folder carries while it is collapsed. */
+.explorer-row .dot {
+  flex: 0 0 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.explorer-row .ro {
+  flex: 0 0 auto;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: var(--surface-3);
+  color: var(--text-faint);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.explorer-row .open-count {
+  flex: 0 0 auto;
+  min-width: 15px;
+  padding: 0 4px;
+  border-radius: 7px;
+  background: var(--surface-3);
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* Only on the row under the pointer, or on the active file — a column of ×
+   next to every open file is noise. */
+.explorer-close {
+  flex: 0 0 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-faint);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  visibility: hidden;
+}
+.explorer-row.file:hover .explorer-close,
+.explorer-row.file.active .explorer-close {
+  visibility: visible;
+}
+.explorer-close:hover:not(:disabled) {
+  background: var(--surface-3);
+  color: var(--text);
+}
+.explorer-close:disabled {
+  opacity: 0.35;
+  cursor: default;
 }

@@ -17,7 +17,18 @@
  * step with the tree the way a stored id can.
  */
 
-export type PaneId = 'editor' | 'sequence' | 'arch' | 'schema' | 'inspector'
+/**
+ * A slot id, treated as opaque.
+ *
+ * It was a union of five literals while the workspace had five fixed panes.
+ * Widening it to a string is what let the vocabulary become an open set —
+ * `${projectId}#${view}` for a document, a bare name for a tool — without
+ * touching a single tree operation. Nothing in this file may interpret one:
+ * anything that needs to (a minimum width, a label, whether an id is still
+ * valid) is injected by the caller, and `state/docId.ts` is the one place that
+ * knows the shape.
+ */
+export type PaneId = string
 
 export interface DockLeaf {
   type: 'leaf'
@@ -46,22 +57,23 @@ export type DropZone = 'left' | 'right' | 'top' | 'bottom' | 'center'
 /** Thickness of a splitter, in px. It occupies space rather than overlapping. */
 export const SPLITTER_PX = 5
 /**
- * How narrow each pane may be laid out, in px. Per pane rather than one
- * constant because they genuinely differ: the inspector's body stacks
- * natural-height children and clips below ~260px, CodeMirror wants ~200px to
- * be usable, and the canvases scroll so they tolerate far less.
+ * How narrow a slot may be laid out, in px.
+ *
+ * Panes genuinely differ — the inspector's body stacks natural-height children
+ * and clips below ~260px, CodeMirror wants ~200px to be usable, and the canvases
+ * scroll so they tolerate far less — but which id wants what is id-shape
+ * knowledge, so it arrives as a function. `docId.minPxOf` is the one the app
+ * passes; this default keeps the tree usable on its own.
  */
-export const MIN_PANE_PX: Record<PaneId, number> = {
-  editor: 200,
-  sequence: 130,
-  arch: 130,
-  schema: 130,
-  inspector: 260,
-}
+export type MinPxOf = (pane: PaneId) => number
+
+export const DEFAULT_MIN_PANE_PX = 130
+
+const defaultMinPx: MinPxOf = () => DEFAULT_MIN_PANE_PX
 
 /** The floor for a slot: the largest minimum among the tabs sharing it. */
-export function minWidthOf(panes: PaneId[]): number {
-  return Math.max(...panes.map((p) => MIN_PANE_PX[p]))
+export function minWidthOf(panes: PaneId[], minPxOf: MinPxOf = defaultMinPx): number {
+  return Math.max(...panes.map(minPxOf))
 }
 /** Height of the tab strip drawn above a leaf that holds more than one pane. */
 export const TAB_BAR_PX = 28
@@ -85,16 +97,30 @@ export function split(
 }
 
 /**
- * The arrangement the app shipped with before docking existed: the four panes
- * in a row at their original weights, with the inspector as a right-hand column.
+ * The arrangement the app shipped with before docking existed: the working
+ * panes in a row at their original weights, with `side` as a right-hand column.
+ *
+ * The panes arrive as arguments rather than being named here, because which
+ * documents exist depends on which project is open — the whole reason slot ids
+ * stopped being literals.
  */
-export function defaultTree(): DockNode {
-  const working = 1 - INSPECTOR_FRACTION
-  return split(
-    'row',
-    [leaf(['editor']), leaf(['sequence']), leaf(['arch']), leaf(['schema']), leaf(['inspector'])],
-    [0.2 * working, 0.28 * working, 0.28 * working, 0.24 * working, INSPECTOR_FRACTION],
-  )
+export function defaultTree(working: PaneId[], side?: PaneId): DockNode {
+  if (!working.length) {
+    if (!side) throw new Error('A default tree needs at least one pane.')
+    return leaf([side])
+  }
+
+  const share = side ? 1 - INSPECTOR_FRACTION : 1
+  // The original four weights, kept in proportion however many panes arrive.
+  const weights = [0.2, 0.28, 0.28, 0.24]
+  const mine = working.map((_, i) => weights[i] ?? 1 / working.length)
+  const total = mine.reduce((a, b) => a + b, 0)
+
+  const slots = working.map((pane) => leaf([pane]))
+  const sizes = mine.map((w) => (w / total) * share)
+
+  if (!side) return slots.length === 1 ? slots[0] : split('row', slots, sizes)
+  return split('row', [...slots, leaf([side])], [...sizes, INSPECTOR_FRACTION])
 }
 
 /**
@@ -310,6 +336,66 @@ export function setActiveTab(root: DockNode, target: DockPath, pane: PaneId): Do
 }
 
 /**
+ * Rewrite every pane id, keeping the arrangement.
+ *
+ * `fn` returning null drops that pane, pruning whatever it empties. This is the
+ * one operation the open-ended id vocabulary actually needs from the tree:
+ * switching project re-points the same arrangement at another project's
+ * documents, and reconciling against the project list removes the documents of
+ * a project that has gone. Both are renames, not rearrangements, so the
+ * workspace must not move — and because the ids stay opaque here, neither case
+ * needs a tree operation of its own.
+ *
+ * Returns the same node when nothing changed, so a caller can compare by
+ * identity and skip a write.
+ */
+export function mapPanes(root: DockNode, fn: (pane: PaneId) => PaneId | null): DockNode | null {
+  let touched = false
+
+  const walk = (node: DockNode): DockNode | null => {
+    if (node.type === 'leaf') {
+      const panes: PaneId[] = []
+      for (const pane of node.panes) {
+        const next = fn(pane)
+        if (next === null) {
+          touched = true
+          continue
+        }
+        if (next !== pane) touched = true
+        // A rename can collide with a pane already in this slot.
+        if (!panes.includes(next)) panes.push(next)
+      }
+      if (!panes.length) return null
+      const active = fn(node.active)
+      return leaf(panes, active && panes.includes(active) ? active : undefined)
+    }
+
+    const kept: DockNode[] = []
+    const sizes: number[] = []
+    node.children.forEach((child, i) => {
+      const done = walk(child)
+      if (!done) return
+      kept.push(done)
+      sizes.push(node.sizes[i] ?? 1 / node.children.length)
+    })
+    if (!kept.length) return null
+    return {
+      type: 'split',
+      direction: node.direction,
+      children: kept,
+      sizes: renormalise(sizes, kept.length),
+    }
+  }
+
+  const mapped = walk(root)
+  if (!touched) return root
+  if (!mapped) return null
+  // A rename can leave two panes sharing an id, which the tree forbids.
+  const deduped = dropDuplicates(mapped)
+  return deduped ? normalise(deduped) : null
+}
+
+/**
  * Move `delta` (a fraction of the split's main axis) from the child after the
  * boundary into the one before it. Conserves the pair's total, so no other
  * child of the split — and no other split — moves.
@@ -391,7 +477,12 @@ export interface DockLayout {
  * Turn the tree into rectangles. Splitters take their own space rather than
  * overlapping, which is how the flex layout this replaces already behaved.
  */
-export function computeLayout(root: DockNode, width: number, height: number): DockLayout {
+export function computeLayout(
+  root: DockNode,
+  width: number,
+  height: number,
+  minPxOf: MinPxOf = defaultMinPx,
+): DockLayout {
   const leaves: LeafBox[] = []
   const splitters: SplitterBox[] = []
   const panes = new Map<PaneId, Rect>()
@@ -412,7 +503,7 @@ export function computeLayout(root: DockNode, width: number, height: number): Do
     // A column's minimum is a height, and pane minimums are widths — only
     // constrain the axis they describe.
     const minima = node.children.map((child) =>
-      row ? minWidthOf(paneIds(child)) : MIN_LEAF_HEIGHT_PX,
+      row ? minWidthOf(paneIds(child), minPxOf) : MIN_LEAF_HEIGHT_PX,
     )
     const lengths = distribute(node.sizes, along, minima)
 
@@ -628,7 +719,7 @@ function neighbourPane(
  * gracefully as the recorded landmarks disappear: its old tab group, then
  * either neighbour, then simply the widest slot on screen.
  */
-export function restorePane(root: DockNode, spec: RestoreSpec): DockNode {
+export function restorePane(root: DockNode, spec: RestoreSpec, order: PaneId[] = []): DockNode {
   if (paneIds(root).includes(spec.pane)) return root
 
   if (spec.tabbedWith) {
@@ -655,7 +746,7 @@ export function restorePane(root: DockNode, spec: RestoreSpec): DockNode {
 
   // Nothing recorded survives. Land next to the nearest pane that is still
   // open, in the canonical order — predictable, unlike picking the biggest slot.
-  const fallback = nearestOpen(root, spec.pane)
+  const fallback = nearestOpen(root, spec.pane, order)
   if (fallback) {
     return insertPane(root, spec.pane, fallback.path, zoneFor(spec.direction, fallback.side))
   }
@@ -696,15 +787,16 @@ function addTab(root: DockNode, pane: PaneId, target: DockPath, index?: number):
 function nearestOpen(
   root: DockNode,
   pane: PaneId,
+  order: PaneId[],
 ): { path: DockPath; side: 'after' | 'before' } | undefined {
-  const home = ALL_PANES.indexOf(pane)
+  const home = order.indexOf(pane)
   if (home < 0) return undefined
-  for (let distance = 1; distance < ALL_PANES.length; distance++) {
+  for (let distance = 1; distance < order.length; distance++) {
     for (const [offset, side] of [
       [-distance, 'after'],
       [distance, 'before'],
     ] as const) {
-      const candidate = ALL_PANES[home + offset]
+      const candidate = order[home + offset]
       if (!candidate) continue
       const found = findPane(root, candidate)
       if (found) return { path: found.path, side }
@@ -754,53 +846,74 @@ function insertBeside(
 
 /* --------------------------------------------------------------- migration */
 
-const ALL_PANES: PaneId[] = ['editor', 'sequence', 'arch', 'schema', 'inspector']
-
-export function isPaneId(value: unknown): value is PaneId {
-  return typeof value === 'string' && (ALL_PANES as string[]).includes(value)
-}
+/**
+ * The pane names the pre-docking format used. They are a property of *that*
+ * schema rather than of this build, which is why migration may still name them
+ * while nothing else here does — but what they become is the caller's to say.
+ */
+const LEGACY_PANES = ['editor', 'sequence', 'arch', 'schema'] as const
+const LEGACY_SIDE = 'inspector'
 
 /**
  * Build a tree from the flat `{ visible, weights }` layout the app persisted
  * before docking existed, so an upgrade preserves the arrangement rather than
  * resetting it.
+ *
+ * `toId` translates a legacy pane name into whatever this build calls that
+ * slot — a document id, now that a slot holds one.
  */
-export function migrate(raw: unknown): { root: DockNode; closed: PaneId[] } | null {
+export function migrate(
+  raw: unknown,
+  toId: (legacy: string) => PaneId = (legacy) => legacy,
+): { root: DockNode; closed: PaneId[] } | null {
   if (!raw || typeof raw !== 'object') return null
   const saved = raw as { visible?: Record<string, boolean>; weights?: Record<string, number> }
   if (!saved.visible) return null
 
-  const order: PaneId[] = ['editor', 'sequence', 'arch', 'schema']
-  const shown = order.filter((id) => saved.visible?.[id])
-  const closed = ALL_PANES.filter((id) => !saved.visible?.[id])
+  const shown = LEGACY_PANES.filter((id) => saved.visible?.[id])
+  const closed = [...LEGACY_PANES, LEGACY_SIDE]
+    .filter((id) => !saved.visible?.[id])
+    .map(toId)
   if (!shown.length) return null
 
   const row = split(
     'row',
-    shown.map((id) => leaf([id])),
+    shown.map((id) => leaf([toId(id)])),
     shown.map((id) => saved.weights?.[id] ?? 1 / shown.length),
   )
-  const root = saved.visible.inspector
-    ? split('row', [row, leaf(['inspector'])], [1 - INSPECTOR_FRACTION, INSPECTOR_FRACTION])
+  const root = saved.visible[LEGACY_SIDE]
+    ? split(
+        'row',
+        [row, leaf([toId(LEGACY_SIDE)])],
+        [1 - INSPECTOR_FRACTION, INSPECTOR_FRACTION],
+      )
     : row
 
-  return { root: normalise(root) ?? defaultTree(), closed }
+  return { root: normalise(root) ?? row, closed }
 }
 
 /**
  * Drop panes a newer build no longer knows about, and anything left malformed.
  * Returns null when nothing usable survives, so the caller falls back to the
  * default rather than rendering an empty workspace.
+ *
+ * What counts as a pane id is the caller's to decide — `isValid` defaults to
+ * "any non-empty string", which is all this file can honestly assert.
  */
-export function sanitise(raw: unknown): DockNode | null {
+export function sanitise(
+  raw: unknown,
+  isValid: (id: unknown) => boolean = (id) => typeof id === 'string' && id.length > 0,
+): DockNode | null {
   const walk = (node: unknown): DockNode | null => {
     if (!node || typeof node !== 'object') return null
     const candidate = node as Partial<DockLeaf> & Partial<DockSplit>
 
     if (candidate.type === 'leaf') {
-      const panes = Array.isArray(candidate.panes) ? candidate.panes.filter(isPaneId) : []
+      const panes = Array.isArray(candidate.panes) ? candidate.panes.filter(isValid) : []
       const unique = [...new Set(panes)]
-      return unique.length ? leaf(unique, isPaneId(candidate.active) ? candidate.active : undefined) : null
+      return unique.length
+        ? leaf(unique, isValid(candidate.active) ? candidate.active : undefined)
+        : null
     }
     if (candidate.type === 'split' && Array.isArray(candidate.children)) {
       const direction = candidate.direction === 'column' ? 'column' : 'row'

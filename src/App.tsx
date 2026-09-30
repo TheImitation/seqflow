@@ -13,25 +13,28 @@ import { usePlaybackControls, usePlaybackSteps } from './playback/usePlayback'
 import { ArchitectureCanvas } from './render/ArchitectureCanvas'
 import { SchemaCanvas } from './render/SchemaCanvas'
 import { SequenceCanvas } from './render/SequenceCanvas'
+import { writeProject } from './state/saveCurrent'
 import { useStore } from './state/store'
 import { Editor } from './components/Editor'
+import { Explorer } from './components/Explorer'
 import { PlaybackBar } from './components/PlaybackBar'
 import { DockView } from './components/DockView'
 import { StatusBar } from './components/StatusBar'
 import { Toolbar } from './components/Toolbar'
 import { PaneRail, PaneHideButton } from './components/PaneRail'
-import { findPane, isBackgroundTab, paneIds, usePanels, type PaneId, type PanelId } from './state/panels'
+import { findPane, isBackgroundTab, paneIds, usePanels, type SlotId } from './state/panels'
+import {
+  describeSlot,
+  fileNameOf,
+  isToolId,
+  makeDocId,
+  slotForKey,
+  viewOf,
+} from './state/docId'
+import { projectsWithOpenTabs } from './state/explorerTree'
 import type { MenuDeps } from './components/menus'
 
 const AUTOSAVE_MS = 600
-
-const PANEL_KEYS: Record<string, PanelId | undefined> = {
-  '1': 'editor',
-  '2': 'sequence',
-  '3': 'arch',
-  '4': 'schema',
-  b: 'inspector',
-}
 
 export default function App() {
   const text = useStore((s) => s.text)
@@ -42,6 +45,7 @@ export default function App() {
   const redo = useStore((s) => s.redo)
 
   const closed = usePanels((s) => s.closed)
+  const explorerOpen = usePanels((s) => s.explorerOpen)
   const [toasts, setToasts] = useState<{ id: number; text: string }[]>([])
   const [saved, setSaved] = useState<string | null>(null)
   const [revealLine, setRevealLine] = useState<number | undefined>()
@@ -114,8 +118,17 @@ export default function App() {
     [setProjects],
   )
 
-  // Boot: reopen whatever was last active, or promote the starter diagram into
-  // a real project so there is always something to save into.
+  /**
+   * Boot: reopen whatever was last active, or promote the starter diagram into
+   * a real project so there is always something to save into.
+   *
+   * The workspace is rebased onto whatever wins, which is the step that makes
+   * the persisted arrangement mean anything: it was saved holding *some*
+   * project's document ids, and until they are re-pointed at the project now
+   * open, every tab names a document that is not the one on screen. The tree's
+   * own project is consulted first — it is the arrangement the user last saw —
+   * and only then the separately stored "current project".
+   */
   useEffect(() => {
     let cancelled = false
     void (async () => {
@@ -123,14 +136,25 @@ export default function App() {
       if (cancelled) return
       setProjects(all)
 
-      const wanted = (id && (await loadProject(id))) || null
-      const fallback =
-        wanted ?? (all[0] ? await loadProject(all[0].id) : null)
+      const live = new Set(all.map((p) => p.id))
+      const docked = [...projectsWithOpenTabs(paneIds(usePanels.getState().root))].find((p) =>
+        live.has(p),
+      )
+
+      const candidates = [docked, id, all[0]?.id].filter(
+        (candidate): candidate is string => !!candidate && live.has(candidate),
+      )
+      let opened: Awaited<ReturnType<typeof loadProject>> = null
+      for (const candidate of candidates) {
+        opened = await loadProject(candidate)
+        if (opened) break
+      }
       if (cancelled) return
 
-      if (fallback) {
-        openProject(fallback)
-        void setCurrentProjectId(fallback.id)
+      if (opened) {
+        openProject(opened)
+        usePanels.getState().rebaseTo(opened.id)
+        void setCurrentProjectId(opened.id)
         return
       }
 
@@ -139,6 +163,7 @@ export default function App() {
       await setCurrentProjectId(created.id)
       if (cancelled) return
       openProject(created)
+      usePanels.getState().rebaseTo(created.id)
       void refreshProjects()
     })()
     return () => {
@@ -151,21 +176,18 @@ export default function App() {
     setSaved('saving…')
     const handle = setTimeout(() => {
       void (async () => {
-        const existing = await loadProject(projectId)
-        const ok = await saveProject({
-          version: 1,
-          id: projectId,
-          name: projectName,
-          dsl: text,
-          createdAt: existing?.createdAt ?? new Date().toISOString(),
-          savedAt: new Date().toISOString(),
-        })
+        const ok = await writeProject(projectId, projectName, text)
         setSaved(
           ok
             ? `saved ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
             : 'browser storage unavailable',
         )
-        if (ok) void refreshProjects()
+        if (ok) {
+          // What storage now holds, which is what the explorer's dirty dot is
+          // a comparison against.
+          useStore.getState().markSaved(text)
+          void refreshProjects()
+        }
       })()
     }, AUTOSAVE_MS)
     return () => clearTimeout(handle)
@@ -212,7 +234,7 @@ export default function App() {
    * case the press was almost certainly not meant to dismiss it.
    */
   const reachPanel = useCallback(
-    (id: PanelId) => {
+    (id: SlotId) => {
       const root = usePanels.getState().root
       if (!paneIds(root).includes(id)) {
         usePanels.getState().show(id)
@@ -242,12 +264,15 @@ export default function App() {
 
       const mod = e.metaKey || e.ctrlKey
 
-      // Panel shortcuts work while typing, the way VS Code's do.
+      // Panel shortcuts work while typing, the way VS Code's do. A key names a
+      // *view* — "the schema of whatever is open" — so it is resolved against
+      // the project the workspace currently holds.
       if (mod && !e.shiftKey && !e.altKey) {
-        const panel = PANEL_KEYS[e.key.toLowerCase()]
-        if (panel) {
+        const slot = slotForKey(e.key)
+        const project = usePanels.getState().projectId
+        if (slot) {
           e.preventDefault()
-          reachPanel(panel)
+          reachPanel(isToolId(slot) ? slot : makeDocId(project, slot))
           return
         }
       }
@@ -279,30 +304,55 @@ export default function App() {
 
   /* ------------------------------------------------------------ pane content */
   /**
-   * What goes in each slot. `DockView` positions these; none of them knows or
+   * What goes in a slot. `DockView` positions these; none of them knows or
    * cares where it ended up, which is what keeps the tree out of the panes.
+   *
+   * Dispatched on the *view*, not the document: only one project is open at a
+   * time, so `arch` means the architecture of the open project and the panes
+   * read it straight from the doc store, exactly as they did when a slot was a
+   * fixed pane. The document id only decides which slot is which.
    */
-  const paneContent: Record<PaneId, React.ReactNode> = {
-    editor: (
-      <section className="pane">
-        <div className="pane-head">
-          DSL
-          <span className="spacer" />
-          <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 500 }}>
-            source of truth
-          </span>
-          <PaneHideButton id="editor" />
-        </div>
-        <div className="pane-body">
-          <Editor revealLine={revealLine} />
-        </div>
-      </section>
-    ),
-    sequence: <SequenceCanvas menuDeps={menuDeps} />,
-    arch: <ArchitectureCanvas menuDeps={menuDeps} />,
-    schema: <SchemaCanvas />,
-    inspector: <ContractInspector />,
-  }
+  const renderPane = useCallback(
+    (id: SlotId): React.ReactNode => {
+      if (isToolId(id)) return <ContractInspector />
+      switch (viewOf(id)) {
+        case 'dsl':
+          return (
+            <section className="pane">
+              <div className="pane-head">
+                DSL
+                <span className="spacer" />
+                <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 500 }}>
+                  source of truth
+                </span>
+                <PaneHideButton id={id} />
+              </div>
+              <div className="pane-body">
+                <Editor revealLine={revealLine} />
+              </div>
+            </section>
+          )
+        case 'sequence':
+          return <SequenceCanvas menuDeps={menuDeps} />
+        case 'arch':
+          return <ArchitectureCanvas menuDeps={menuDeps} />
+        case 'schema':
+          return <SchemaCanvas />
+        default:
+          return null
+      }
+    },
+    [menuDeps, revealLine],
+  )
+
+  /** A tab says `platform-spine.arch`; a tool says what it is. */
+  const labelOf = useCallback(
+    (id: SlotId) => {
+      const view = viewOf(id)
+      return view ? fileNameOf(projectName, view) : describeSlot(id)
+    },
+    [projectName],
+  )
 
   const closedPanels = closed.map((spec) => spec.pane)
 
@@ -311,7 +361,8 @@ export default function App() {
       <Toolbar onToast={toast} />
 
       <div className="workspace">
-        <DockView panes={paneContent} />
+        {explorerOpen && <Explorer onToast={toast} />}
+        <DockView renderPane={renderPane} labelOf={labelOf} />
         {closedPanels.length > 0 && (
           <div className="rail-strip">
             {closedPanels.map((id) => (

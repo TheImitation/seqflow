@@ -74,8 +74,15 @@ export interface AppState extends Derived {
   /** Id of the project autosave writes to. Null until hydration finishes. */
   projectId: string | null
   projectName: string
-  /** Every stored project, for the switcher. Refreshed after each change. */
+  /** Every stored project, for the switcher and the explorer. */
   projects: ProjectSummary[]
+  /**
+   * The text as storage last saw it, so "unsaved" is a comparison rather than a
+   * flag that has to be cleared correctly from three places. Null until the
+   * first write of a session — the explorer treats that as clean, because
+   * autosave is 600ms away and a project is not dirty for having been opened.
+   */
+  savedText: string | null
 
   setText: (text: string, source?: TextSource) => void
   /**
@@ -111,6 +118,8 @@ export interface AppState extends Derived {
   resetPlayback: () => void
 
   setProjects: (projects: ProjectSummary[]) => void
+  /** Called after a successful write, with the text that was written. */
+  markSaved: (text: string) => void
   /** Point the session at a project and load its text, without touching disk. */
   openProject: (project: { id: string; name: string; dsl: string }) => void
   renameProject: (name: string) => void
@@ -137,6 +146,7 @@ export const useStore = create<AppState>((set, get) => ({
   projectId: null,
   projectName: 'Untitled',
   projects: [],
+  savedText: null,
 
   setText: (text, source = 'editor') => {
     const state = get()
@@ -237,6 +247,8 @@ export const useStore = create<AppState>((set, get) => ({
 
   setProjects: (projects) => set({ projects }),
 
+  markSaved: (savedText) => set({ savedText }),
+
   openProject: ({ id, name, dsl }) => {
     const next = derive(dsl)
     set({
@@ -244,6 +256,8 @@ export const useStore = create<AppState>((set, get) => ({
       ...next,
       projectId: id,
       projectName: name,
+      // Freshly loaded text *is* what storage holds.
+      savedText: dsl,
       // History is per-project: undoing across a switch would write one
       // project's text into another.
       past: [],
