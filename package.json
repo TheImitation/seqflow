@@ -1,7 +1,18 @@
 {
   "name": "seqflow",
+  "version": "0.1.0",
   "private": true,
-  "version": "0.0.0",
+  "description": "Hybrid text/visual editor for microservice sequence diagrams, with an inferred architecture view.",
+  "license": "MIT",
+  "author": "Nic Defaux",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TheImitation/seqflow.git"
+  },
+  "homepage": "https://theimitation.github.io/seqflow/",
+  "bugs": {
+    "url": "https://github.com/TheImitation/seqflow/issues"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -43,6 +54,5 @@
     "typescript": "~6.0.2",
     "vite": "^8.2.2",
     "vitest": "^4.1.11"
-  },
-  "description": "Hybrid text/visual editor for microservice sequence diagrams, with an inferred architecture view."
+  }
 }

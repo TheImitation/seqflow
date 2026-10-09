@@ -15,6 +15,14 @@ Three panes over one document:
 Plus a **contract inspector** on the right: attach a reusable request/response model
 to any link, and generate its unhappy paths as real `alt` / `opt` blocks.
 
+![The three panes over one document, with the contract inspector on the right](assets/screenshot.png)
+
+**[Try it in your browser →](https://theimitation.github.io/seqflow/)**
+No install, no account — the hosted build is the same app, running entirely on
+your machine. Everything you make stays in your browser.
+
+Or run it locally:
+
 ```bash
 npm install
 npm run dev
@@ -509,7 +517,13 @@ npm run dev:all                    # app + proxy together
 ```
 
 or run them separately with `npm run dev` and `npm run dev:proxy`. The client only
-ever talks to `localhost`; the key stays in the proxy process. Override the model
+ever talks to `localhost`; the key stays in the proxy process.
+
+Because there is no proxy to reach on a static host, **the prompt bar is hidden in
+the hosted build** rather than left as a button that can only fail — the code is
+tree-shaken out of the bundle entirely. Every other feature works there. If you
+self-host alongside your own proxy, build with `VITE_AI_ASSIST=true` to bring it
+back. Override the model
 with `ANTHROPIC_MODEL` (default `claude-opus-5`) and the port with
 `SEQFLOW_PROXY_PORT` (default 8787).
 
@@ -661,9 +675,31 @@ npm run lint
 npm run build
 ```
 
+## Deploying
+
+A static SPA with no router and no server side, so the build output is the whole
+deployment. Pushing to `main` builds and publishes to GitHub Pages
+(`.github/workflows/deploy.yml`); every pull request runs typecheck, lint, tests
+and a build first (`.github/workflows/ci.yml`).
+
+Pages serves from `/<repo>/` rather than the domain root, so a production build
+bakes in `base: '/seqflow/'`. Hosting at the root of your own domain instead:
+
+```bash
+SEQFLOW_BASE=/ npm run build
+```
+
+Dev is unaffected — the base only applies to `vite build`.
+
 ## Non-goals
 
 No collaboration, no server-side persistence, no accounts, no auth, and no attempt
 at production-correct CDK. Contracts are documentation and scaffolding: the app does
 not validate live traffic against them and does not stand up a mock server. It is a
 fast, local, single-player tool.
+
+---
+
+## Licence
+
+[MIT](LICENSE).
