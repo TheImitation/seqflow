@@ -1,20 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
-import {
-  isBackgroundTab,
-  PANEL_LABEL,
-  PANEL_ORDER,
-  PANEL_SHORTCUT,
-  paneIds,
-  usePanels,
-} from '../state/panels'
+import { shortLabelOf, shortcutOf, slotOrder } from '../state/docId'
+import { isBackgroundTab, paneIds, usePanels } from '../state/panels'
 
-/** Every panel in one place, so nothing can be hidden past finding again. */
+/**
+ * Every panel in one place, so nothing can be hidden past finding again.
+ *
+ * The list is the open project's four documents plus the inspector, in
+ * canonical order — `slotOrder` rather than a constant, because which documents
+ * exist depends on which project is open.
+ */
 export function ViewMenu() {
   const root = usePanels((s) => s.root)
+  const projectId = usePanels((s) => s.projectId)
   const toggle = usePanels((s) => s.toggle)
   const resetLayout = usePanels((s) => s.resetLayout)
   const minimap = usePanels((s) => s.minimap)
   const toggleMinimap = usePanels((s) => s.toggleMinimap)
+  const explorerOpen = usePanels((s) => s.explorerOpen)
+  const toggleExplorer = usePanels((s) => s.toggleExplorer)
   const [open, setOpen] = useState(false)
   const host = useRef<HTMLDivElement | null>(null)
 
@@ -39,7 +42,7 @@ export function ViewMenu() {
       {open && (
         <div className="menu" role="menu">
           <div className="group-label">Panels</div>
-          {PANEL_ORDER.map((id) => {
+          {slotOrder(projectId).map((id) => {
             const on = onScreen.has(id)
             const behind = on && isBackgroundTab(root, id)
             const last = on && onlyPane
@@ -62,13 +65,25 @@ export function ViewMenu() {
                 {/* Three states, not two: a pane can be open but tabbed behind
                     another, which a plain tick would misreport as fully visible. */}
                 <span className="check">{behind ? '◗' : on ? '✓' : ''}</span>
-                {PANEL_LABEL[id]}
-                <small>{PANEL_SHORTCUT[id]}</small>
+                {shortLabelOf(id)}
+                <small>{shortcutOf(id)}</small>
               </button>
             )
           })}
 
           <div className="divider" />
+          <button
+            onClick={() => {
+              toggleExplorer()
+              setOpen(false)
+            }}
+            title="The project and file list down the left-hand side"
+          >
+            <span className="check">{explorerOpen ? '✓' : ''}</span>
+            Explorer
+            <small>files</small>
+          </button>
+
           <button
             onClick={() => {
               toggleMinimap()

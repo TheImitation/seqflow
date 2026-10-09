@@ -60,6 +60,19 @@ describe('kind vocabulary', () => {
       ['redis', 'aws:elasticache'],
       ['pgvector', 'aws:aurora'],
       ['aws:x-ray', 'aws:xray'],
+      ['elb', 'aws:alb'],
+      ['aws:nlb', 'aws:alb'],
+      ['loadbalancer', 'aws:alb'],
+      ['firehose', 'aws:firehose'],
+      ['aws:kinesis-firehose', 'aws:firehose'],
+      ['aws:data-firehose', 'aws:firehose'],
+      ['avp', 'aws:verifiedpermissions'],
+      ['cedar', 'aws:verifiedpermissions'],
+      ['aws:verified-permissions', 'aws:verifiedpermissions'],
+      ['sts', 'aws:iam'],
+      ['aws:role', 'aws:iam'],
+      ['registry', 'aws:ecr'],
+      ['aws:blue-green', 'aws:codedeploy'],
     ]
     for (const [written, expected] of cases) {
       const { doc, errors } = parse(`sequenceDiagram\n  participant P : ${written}\n`)

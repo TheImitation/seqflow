@@ -270,6 +270,50 @@ const CONSTRUCTS: Partial<Record<ParticipantKind, ConstructSpec>> = {
     ctor: 'LogGroup',
     props: ["logGroupName: '/seqflow/%VAR%'", 'retention: logs.RetentionDays.ONE_MONTH'],
   },
+  'aws:alb': {
+    module: 'aws-cdk-lib/aws-elasticloadbalancingv2',
+    namespace: 'elbv2',
+    ctor: 'ApplicationLoadBalancer',
+    props: ['vpc', 'internetFacing: false', "loadBalancerName: '%VAR%'", 'http2Enabled: true'],
+  },
+  'aws:firehose': {
+    module: 'aws-cdk-lib/aws-kinesisfirehose',
+    namespace: 'firehose',
+    ctor: 'DeliveryStream',
+    props: ["deliveryStreamName: '%VAR%'", 'destination: /* new firehose.S3Bucket(bucket) */ undefined as never'],
+  },
+  'aws:iam': {
+    module: 'aws-cdk-lib/aws-iam',
+    namespace: 'iam',
+    ctor: 'Role',
+    props: ["roleName: '%VAR%'", "assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com')"],
+  },
+  'aws:verifiedpermissions': {
+    module: 'aws-cdk-lib/aws-verifiedpermissions',
+    namespace: 'verifiedpermissions',
+    ctor: 'CfnPolicyStore',
+    props: ["validationSettings: { mode: 'STRICT' }", "description: '%LABEL%'"],
+  },
+  'aws:ecr': {
+    module: 'aws-cdk-lib/aws-ecr',
+    namespace: 'ecr',
+    ctor: 'Repository',
+    props: [
+      "repositoryName: '%VAR%'",
+      'imageTagMutability: ecr.TagMutability.IMMUTABLE',
+      'imageScanOnPush: true',
+    ],
+  },
+  'aws:codedeploy': {
+    module: 'aws-cdk-lib/aws-codedeploy',
+    namespace: 'codedeploy',
+    ctor: 'EcsDeploymentGroup',
+    props: [
+      'service: /* the ecs.FargateService to deploy */ undefined as never',
+      'blueGreenDeploymentConfig: { /* listener, target groups */ }',
+      'deploymentConfig: codedeploy.EcsDeploymentConfig.CANARY_10PERCENT_5MINUTES',
+    ],
+  },
   'aws:rds': {
     module: 'aws-cdk-lib/aws-rds',
     namespace: 'rds',
@@ -454,6 +498,10 @@ function wireEdge(
         return [`${b}.grantPublish(${a})`]
       case 'aws:kinesis':
         return [`${b}.grantWrite(${a})`]
+      case 'aws:firehose':
+        return [`${b}.grantPutRecords(${a})`]
+      case 'aws:ecr':
+        return [`${b}.grantPull(${a})`]
       case 'aws:eventbridge':
         return [`${b}.grantPutEventsTo(${a})`]
       case 'aws:rds':

@@ -9,7 +9,10 @@ export function fieldSchema(field: DataModelField): JsonSchema {
       case 'string':
         return { type: 'string' }
       case 'number':
+      case 'float':
         return { type: 'number' }
+      case 'int':
+        return { type: 'integer' }
       case 'boolean':
         return { type: 'boolean' }
       case 'date':
@@ -104,7 +107,10 @@ export function exampleValue(field: DataModelField): unknown {
     case 'string':
       return `<${field.name}>`
     case 'number':
+    case 'int':
       return 0
+    case 'float':
+      return 0.5
     case 'boolean':
       return false
     case 'date':

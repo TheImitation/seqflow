@@ -1,4 +1,5 @@
-import { findPane, isBackgroundTab, paneIds, usePanels, type PaneId } from '../state/panels'
+import { makeDocId, viewOf, type ViewKind } from '../state/docId'
+import { findPane, isBackgroundTab, paneIds, usePanels, type SlotId } from '../state/panels'
 import { useStore } from '../state/store'
 import { useViewLayout, type GraphPaneId } from '../state/viewLayout'
 import { MAX_CANVAS_PIXELS } from './snapshotGeometry'
@@ -47,10 +48,18 @@ export interface CaptureResult {
   skipped: { id: DiagramId; reason: CaptureSkip; detail?: string }[]
 }
 
-const PANE_OF: Record<DiagramId, PaneId> = {
+const VIEW_OF: Record<DiagramId, ViewKind> = {
   sequence: 'sequence',
   architecture: 'arch',
   schema: 'schema',
+}
+
+/**
+ * The slot a figure is drawn in, which is a document of whichever project is
+ * open — so it is resolved when the capture runs rather than named in a table.
+ */
+function paneOf(id: DiagramId): SlotId {
+  return makeDocId(usePanels.getState().projectId, VIEW_OF[id])
 }
 
 const SELECTOR_OF: Record<DiagramId, string> = {
@@ -77,7 +86,7 @@ export async function captureDiagrams(want: DiagramId[]): Promise<CaptureResult>
   // and hides the flat layout used to require.
   const before = usePanels.getState().root
   const onScreen = new Set(paneIds(before))
-  const opened = want.map((id) => PANE_OF[id]).filter((pane) => !onScreen.has(pane))
+  const opened = want.map(paneOf).filter((pane) => !onScreen.has(pane))
 
   // Playback moves the diagram under us: `usePlayback` fires a step on a timer
   // and the architecture canvas scrolls to follow the active link, which would
@@ -90,11 +99,12 @@ export async function captureDiagrams(want: DiagramId[]): Promise<CaptureResult>
 
   const restoreModes: [GraphPaneId, 'rigid' | 'fluid' | 'manual'][] = []
   for (const pane of opened) {
-    if (pane !== 'arch' && pane !== 'schema') continue
-    const mode = useViewLayout.getState().mode[pane]
+    const view = viewOf(pane)
+    if (view !== 'arch' && view !== 'schema') continue
+    const mode = useViewLayout.getState().mode[view]
     if (mode === 'fluid') {
-      restoreModes.push([pane, mode])
-      useViewLayout.getState().setMode(pane, 'rigid')
+      restoreModes.push([view, mode])
+      useViewLayout.getState().setMode(view, 'rigid')
     }
   }
   for (const pane of opened) usePanels.getState().show(pane)
@@ -102,7 +112,7 @@ export async function captureDiagrams(want: DiagramId[]): Promise<CaptureResult>
   // A pane already on screen may be behind another tab in its slot. Bringing it
   // to the front costs nothing and is restored wholesale with the tree below.
   for (const id of want) {
-    const pane = PANE_OF[id]
+    const pane = paneOf(id)
     const current = usePanels.getState().root
     if (isBackgroundTab(current, pane)) {
       const home = findPane(current, pane)

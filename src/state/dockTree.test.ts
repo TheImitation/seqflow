@@ -1,26 +1,26 @@
 import { describe, expect, it } from 'vitest'
 import {
-  computeLayout,
-  defaultTree,
+  computeLayout as computeLayoutRaw,
+  defaultTree as buildDefaultTree,
   describeForRestore,
   dropTargetAt,
   EDGE_BAND,
   findPane,
   insertPane,
   leaf,
+  mapPanes,
   migrate,
   MIN_FRACTION,
-  MIN_PANE_PX,
-  minWidthOf,
+  minWidthOf as minWidthOfRaw,
   movePane,
   nodeAt,
   normalise,
   paneIds,
   removePane,
-  restorePane,
+  restorePane as restorePaneRaw,
   resizeSplit,
   samePath,
-  sanitise,
+  sanitise as sanitiseRaw,
   setActiveTab,
   split,
   SPLITTER_PX,
@@ -28,6 +28,35 @@ import {
   type DockNode,
   type PaneId,
 } from './dockTree'
+
+/**
+ * The vocabulary this suite is written against.
+ *
+ * Slot ids are opaque to the tree now, and everything that used to be baked in
+ * — which ids exist, what each one's minimum width is, which ones are still
+ * valid — arrives from the caller. The app injects `docId`'s answers; the suite
+ * injects the five panes the tree was originally written for, so the
+ * assertions below still describe the behaviour they always described.
+ */
+const WORKING: PaneId[] = ['editor', 'sequence', 'arch', 'schema']
+const ALL_PANES: PaneId[] = [...WORKING, 'inspector']
+
+const MIN_PANE_PX: Record<string, number> = {
+  editor: 200,
+  sequence: 130,
+  arch: 130,
+  schema: 130,
+  inspector: 260,
+}
+const minPx = (pane: PaneId) => MIN_PANE_PX[pane] ?? 130
+const known = (id: unknown) => typeof id === 'string' && id in MIN_PANE_PX
+
+const defaultTree = () => buildDefaultTree(WORKING, 'inspector')
+const computeLayout = (root: DockNode, w: number, h: number) => computeLayoutRaw(root, w, h, minPx)
+const minWidthOf = (panes: PaneId[]) => minWidthOfRaw(panes, minPx)
+const sanitise = (raw: unknown) => sanitiseRaw(raw, known)
+const restorePane = (root: DockNode, spec: Parameters<typeof restorePaneRaw>[1]) =>
+  restorePaneRaw(root, spec, ALL_PANES)
 
 /** A plain two-pane row, the smallest interesting tree. */
 const pair = () => split('row', [leaf(['editor']), leaf(['arch'])], [0.5, 0.5])
@@ -929,5 +958,86 @@ describe('close and reopen', () => {
       tree = restorePane(tree, spec)
       expect(paneIds(tree).sort()).toEqual(paneIds(defaultTree()).sort())
     }
+  })
+})
+
+describe('defaultTree, given its panes', () => {
+  it('lays out however many working panes it is handed', () => {
+    const tree = buildDefaultTree(['a', 'b'], 'side')
+    expect(paneIds(tree)).toEqual(['a', 'b', 'side'])
+  })
+
+  it('gives the side pane the share the inspector column always had', () => {
+    const sizes = sizesOf(buildDefaultTree(['a', 'b'], 'side'))
+    expect(sizes[sizes.length - 1]).toBeCloseTo(0.22)
+  })
+
+  it('keeps the original four weights in proportion', () => {
+    const sizes = sizesOf(buildDefaultTree(WORKING, 'inspector'))
+    expect(sizes[0] / sizes[1]).toBeCloseTo(0.2 / 0.28)
+  })
+
+  it('shares the whole width when there is no side pane', () => {
+    expect(sum(sizesOf(buildDefaultTree(['a', 'b'])))).toBeCloseTo(1)
+  })
+
+  it('collapses to a bare leaf rather than a one-child split', () => {
+    expect(buildDefaultTree(['only'])).toMatchObject({ type: 'leaf', panes: ['only'] })
+    expect(buildDefaultTree([], 'side')).toMatchObject({ type: 'leaf', panes: ['side'] })
+  })
+
+  it('refuses to build a tree with nothing in it', () => {
+    expect(() => buildDefaultTree([])).toThrow()
+  })
+})
+
+describe('mapPanes', () => {
+  it('renames every pane and leaves the arrangement alone', () => {
+    const tree = defaultTree()
+    const before = computeLayout(tree, 1600, 1000)
+    const done = mapPanes(tree, (pane) => `x:${pane}`)!
+
+    expect(paneIds(done)).toEqual(paneIds(tree).map((p) => `x:${p}`))
+    // Same rects, so nothing moved on screen.
+    expect(computeLayout(done, 1600, 1000).leaves.map((l) => l.rect)).toEqual(
+      before.leaves.map((l) => l.rect),
+    )
+  })
+
+  it('carries the active tab across the rename', () => {
+    const tree = leaf(['editor', 'arch'], 'arch')
+    expect(mapPanes(tree, (pane) => `x:${pane}`)).toMatchObject({
+      panes: ['x:editor', 'x:arch'],
+      active: 'x:arch',
+    })
+  })
+
+  it('drops a pane whose id does not survive, pruning what that empties', () => {
+    const tree = split('row', [leaf(['editor']), leaf(['arch'])], [0.5, 0.5])
+    const done = mapPanes(tree, (pane) => (pane === 'arch' ? null : pane))!
+    expect(done).toMatchObject({ type: 'leaf', panes: ['editor'] })
+  })
+
+  it('returns null when nothing is left, so the caller can fall back', () => {
+    expect(mapPanes(leaf(['editor']), () => null)).toBeNull()
+  })
+
+  it('returns the same node when every id is unchanged', () => {
+    const tree = defaultTree()
+    expect(mapPanes(tree, (pane) => pane)).toBe(tree)
+  })
+
+  it('collapses two panes that a rename maps onto the same id', () => {
+    // Otherwise the tree would hold one id twice, which every query assumes
+    // cannot happen.
+    const tree = split('row', [leaf(['editor']), leaf(['arch'])], [0.5, 0.5])
+    const done = mapPanes(tree, () => 'same')!
+    expect(paneIds(done)).toEqual(['same'])
+  })
+
+  it('keeps a tabbed slot tabbed', () => {
+    const tree = split('row', [leaf(['editor', 'arch'], 'editor'), leaf(['schema'])], [0.5, 0.5])
+    const done = mapPanes(tree, (pane) => `x:${pane}`)!
+    expect(findPane(done, 'x:arch')!.leaf.panes).toEqual(['x:editor', 'x:arch'])
   })
 })

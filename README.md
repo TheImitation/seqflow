@@ -15,6 +15,14 @@ Three panes over one document:
 Plus a **contract inspector** on the right: attach a reusable request/response model
 to any link, and generate its unhappy paths as real `alt` / `opt` blocks.
 
+![The three panes over one document, with the contract inspector on the right](assets/screenshot.png)
+
+**[Try it in your browser →](https://theimitation.github.io/seqflow/)**
+No install, no account — the hosted build is the same app, running entirely on
+your machine. Everything you make stays in your browser.
+
+Or run it locally:
+
 ```bash
 npm install
 npm run dev
@@ -54,14 +62,15 @@ makes architecture inference and AWS-awareness possible:
 |---|---|
 | General | `service` `client` `database` `external` |
 | Compute | `aws:lambda` `aws:ecs` `aws:eks` `aws:batch` `aws:apprunner` `aws:stepfunctions` |
-| API & edge | `aws:apigateway` `aws:appsync` `aws:cloudfront` `aws:waf` |
-| Messaging | `aws:sqs` `aws:sns` `aws:eventbridge` `aws:kinesis` `aws:msk` `aws:mq` |
+| API & edge | `aws:apigateway` `aws:appsync` `aws:cloudfront` `aws:waf` `aws:alb` |
+| Messaging | `aws:sqs` `aws:sns` `aws:eventbridge` `aws:kinesis` `aws:firehose` `aws:msk` `aws:mq` |
 | Storage & data | `aws:s3` `aws:dynamodb` `aws:rds` `aws:aurora` `aws:elasticache` `aws:neptune` `aws:redshift` `aws:athena` `aws:glue` |
 | AI & search | `aws:bedrock` `aws:bedrockagent` `aws:knowledgebase` `aws:opensearch` `aws:kendra` `aws:sagemaker` `aws:textract` `aws:comprehend` `aws:rekognition` |
-| Security & ops | `aws:cognito` `aws:secretsmanager` `aws:kms` `aws:cloudwatch` `aws:xray` |
+| Security & ops | `aws:cognito` `aws:verifiedpermissions` `aws:iam` `aws:secretsmanager` `aws:kms` `aws:cloudwatch` `aws:xray` |
+| Delivery | `aws:ecr` `aws:codedeploy` |
 
 `aws:*` participants get an AWS-orange accent in both views, so managed services
-read differently from your own at a glance. The groups are not decoration: at 43
+read differently from your own at a glance. The groups are not decoration: at 49
 kinds a flat picker is unusable, so the inspector uses `optgroup`s and the
 right-click menu nests two levels — *Change kind ▸ AI & search ▸ Bedrock*. A
 test asserts the grouping covers every kind exactly once, so a new kind cannot
@@ -70,7 +79,9 @@ go missing from the UI.
 Common abbreviations are accepted on input and normalised: `vectorsearch`,
 `vectorstore` and `aoss` all mean `aws:opensearch`; `kb` means
 `aws:knowledgebase`; `kafka` means `aws:msk`; `redis` means `aws:elasticache`;
-`pgvector` means `aws:aurora`.
+`pgvector` means `aws:aurora`; `elb`, `nlb` and `loadbalancer` all mean
+`aws:alb`; `avp` and `cedar` mean `aws:verifiedpermissions`; `sts` means
+`aws:iam`; `firehose` and `kinesis-firehose` both mean `aws:firehose`.
 
 ### Failure paths
 
@@ -194,13 +205,49 @@ name. That is content, not syntax.
 
 ---
 
-## Projects
+## Projects and files
 
-The toolbar shows the open project. The dropdown switches between them and
-offers **New** (from the starter or blank), **Duplicate**, **Rename** and
-**Delete**. Everything is autosaved to IndexedDB.
+The **explorer** down the left-hand side lists every project as a folder and
+each project's four views as files:
+
+```
+▾ Agentic — 01 Identity        ●
+    identity.dsl               ●
+    identity.sequence
+    identity.arch
+    identity.schema           RO
+▸ Agentic — 02 Retrieval       2
+```
+
+The stem is slugged from the project name and the extension is the view, so a
+tab reads `identity.arch` rather than "Architecture". Names are truncated from
+the *front* when they are too long, because project names in practice share a
+prefix and differ at the end — `Agentic — 00 Platform spine` and
+`Agentic — 01 Identity` are identical for eight characters.
+
+- A file is listed **whether or not it has a tab**: closing a tab closes the
+  view, not the file. That is the point of having an explorer, and it is why
+  only one project's documents are open at a time — everything else is one
+  click away here.
+- Clicking a file in another project switches to it, flushing the open project
+  first. The workspace keeps its arrangement and is re-pointed at the new
+  project's documents, so nothing moves.
+- `identity.arch` and `identity.schema` are **derived from the DSL** and shown
+  dimmed, the way an editor dims build output. Only the schema is genuinely
+  read-only; the architecture view is a projection you can still edit
+  *through*, via its right-click menus.
+- The dot marks unsaved text. It sits on the `.dsl` file, never on a
+  projection — and moves up to the folder while it is collapsed, so a pending
+  change cannot hide behind a twisty. The number on a collapsed folder is how
+  many of its views are open.
+
+The toolbar still shows the open project. Its dropdown offers **New** (from the
+starter or blank), **Duplicate**, **Rename** and **Delete**. Everything is
+autosaved to IndexedDB.
 
 - Switching **flushes the open project first**, so debounced keystrokes are never lost.
+  Both the explorer and the dropdown go through one function for this, because
+  the order — flush, load, re-point the workspace — is not optional in any of it.
 - Undo history is **per-project** — undoing across a switch would write one project's text into another.
 - **Import** creates a new project rather than replacing what you have open.
 - A pre-projects autosave is migrated into a project on first launch rather than dropped.
@@ -215,7 +262,7 @@ lives. Three operations exist only here — there is no other way to reach them.
 | Target | Menu |
 |---|---|
 | **Arrow** | Suggest unhappy paths · **Wrap in** ▸ · Add reply · Duplicate · **Reverse direction** · Move earlier/later · Arrow style ▸ · Contract ▸ · Play from here · Copy DSL line · Delete |
-| **Participant lane / architecture node** | Change kind ▸ (all 17, ticked) · Add message to ▸ · Move left/right · Reveal in sequence · Delete (says how many messages go with it) |
+| **Participant lane / architecture node** | Change kind ▸ (grouped, ticked) · Add message to ▸ · Move left/right · Reveal in sequence · Delete (says how many messages go with it) |
 | **Block** | **Add else branch** · Change type ▸ · Mark as (unhappy) · Walk *branch* during playback · Move earlier/later · Unwrap · Delete with contents |
 | **Architecture edge** | The messages the link stands for, each selectable · Suggest unhappy paths on ▸ · Reveal in sequence |
 | **Empty canvas** | Add participant ▸ (by kind) · Layout direction ▸ (architecture) · Fit / Actual size / Zoom |
@@ -294,6 +341,12 @@ checklist with a live DSL preview. Nothing is inserted until you tick and confir
 | `aws:dynamodb` | `ConditionalCheckFailed`, `ProvisionedThroughputExceeded`, `ResourceNotFound` |
 | `aws:stepfunctions` | `States.TaskFailed` → Retry → Catch → fallback → execution Failed |
 | `aws:s3` | 403 AccessDenied, 404 NoSuchKey, 503 SlowDown |
+| `aws:alb` | 503 no healthy targets, 504 idle-timeout, 502 target closed the connection |
+| `aws:iam` | 403 AccessDenied on the trust policy, 400 InvalidIdentityToken, session expiry mid-task |
+| `aws:verifiedpermissions` | Deny with the determining policy id, throttling, policy store unavailable → fail closed |
+| `aws:ecr` | 409 immutable tag, 403 AccessDenied, critical scan finding blocks the build |
+| `aws:codedeploy` | alarm fired during the bake → rollback, bake timeout, replacement set never healthy |
+| `aws:firehose` | throughput exceeded, delivery failed → error prefix, transform Lambda failed |
 | `aws:bedrock` | throttling, context-window `ValidationException`, model timeout, guardrail intervention |
 | `aws:knowledgebase` | no passages above threshold, ingestion lag, throttling |
 | `aws:opensearch` | rejected execution, index not found, vector dimension mismatch |
@@ -332,13 +385,16 @@ Keyboard: <kbd>space</kbd> play/pause, <kbd>←</kbd>/<kbd>→</kbd> step,
 ## Panels
 
 Every panel opens and closes, VS Code style. Each pane head carries a `‹` that
-folds the pane into a 30 px rail in the slot it occupied, and clicking the rail
-brings it back. The **View** menu lists all four with their state, and
-**Reset layout** restores the defaults.
+folds the pane into a 30 px rail on the workspace edge, and clicking the rail
+brings it back; a file's row in the explorer carries a `×` that does the same
+thing. The **View** menu lists every panel with its state, toggles the explorer
+and the minimap, and **Reset layout** restores the defaults.
 
 <kbd>⌘1</kbd> DSL · <kbd>⌘2</kbd> Sequence · <kbd>⌘3</kbd> Architecture ·
-<kbd>⌘B</kbd> Inspector. These fire while you are typing in the editor, the way
-VS Code's do — the other shortcuts stand down when a text field has focus.
+<kbd>⌘4</kbd> Schema · <kbd>⌘B</kbd> Inspector. A key names a *view* — "the
+schema of whatever is open" — and is resolved against the open project. These
+fire while you are typing in the editor, the way VS Code's do — the other
+shortcuts stand down when a text field has focus.
 
 ### Minimap
 
@@ -461,7 +517,13 @@ npm run dev:all                    # app + proxy together
 ```
 
 or run them separately with `npm run dev` and `npm run dev:proxy`. The client only
-ever talks to `localhost`; the key stays in the proxy process. Override the model
+ever talks to `localhost`; the key stays in the proxy process.
+
+Because there is no proxy to reach on a static host, **the prompt bar is hidden in
+the hosted build** rather than left as a button that can only fail — the code is
+tree-shaken out of the bundle entirely. Every other feature works there. If you
+self-host alongside your own proxy, build with `VITE_AI_ASSIST=true` to bring it
+back. Override the model
 with `ANTHROPIC_MODEL` (default `claude-opus-5`) and the port with
 `SEQFLOW_PROXY_PORT` (default 8787).
 
@@ -480,6 +542,13 @@ stack the two as tabs. A highlighted preview shows where it will land. Splitters
 divide both axes, closed panes collect on a rail at the right edge, and the
 Inspector is an ordinary dockable pane like the rest.
 
+A slot holds a **document** — one view of one project, addressed
+`p_abc123#arch` — or a **tool**, of which the Inspector is currently the only
+one. The explorer is neither: it is a fixed column beside the dock rather than
+a pane inside it, because it is how documents are *reached*, and docking it in
+the thing it navigates would let it be closed out from under itself with the
+way back only in a menu.
+
 `⌘1`–`⌘4` and `⌘B` reach a panel rather than blindly toggling it: a closed pane
 opens, a pane hidden behind another tab comes to the front, and only a pane that
 is already showing closes — and not even then if the caret is inside it, since
@@ -497,9 +566,25 @@ Two implementation notes worth knowing:
   drops an element out of layout, which zeroes the `ResizeObserver` that both the
   zoom fit and the minimap measure through — so a pane would come forward at the
   wrong zoom with a collapsed minimap.
+- **The tree treats a slot id as opaque.** It was a union of five literals while
+  the workspace had five fixed panes; widening it to a string is what let the
+  vocabulary become an open set without touching a single tree operation.
+  Everything that needs to interpret an id — a minimum width, a label, whether
+  an id is still valid — is injected, and `state/docId.ts` is the one place that
+  knows the shape.
+- **Switching project is a rename, not a rearrangement.** Every document id in
+  the tree is re-pointed at the new project and every tool left alone, which is
+  one pass over the tree and no change to its structure — so the arrangement,
+  the tab groups and the closed panes' recorded neighbours all survive a switch.
+- **The DOM order is accumulated, not constant.** Panes are rendered in a fixed
+  order so that a pane changing slot never moves in the React tree. A fixed set
+  of five could hold that order in a constant; a set of documents that open and
+  close cannot, so the order is merged forward each render — keep what is still
+  open, drop what closed, append what opened.
 
 An arrangement saved by an older build is migrated on first load rather than
-discarded, and the previous `seqflow.layout.v1` key is left untouched.
+discarded: a tree keyed by pane name becomes one keyed by document, and both the
+`seqflow.dock.v1` and `seqflow.layout.v1` keys are left untouched.
 
 ```
 src/
@@ -521,11 +606,17 @@ src/
   templates/      patterns.ts — the 8 AWS pattern snippets
   state/          store.ts (Zustand: doc, selection, playback, undo/redo),
                   dockTree.ts (pure: the docking tree + its geometry),
-                  panels.ts (the layout store over that tree),
+                  docId.ts (pure: what a slot id means — documents and tools),
+                  panels.ts (the document store over that tree),
+                  explorerTree.ts (pure: the explorer as a flat row list),
+                  renderOrder.ts (pure: the stable DOM order of open panes),
+                  saveCurrent.ts (the one flush of the open project),
+                  switchProject.ts (flush, load, re-point — in that order),
                   viewLayout.ts (per-pane diagram arrangement)
   persist/        db.ts (named projects in IndexedDB + project JSON)
   components/     Editor.tsx (CodeMirror 6), Toolbar, TemplateGallery, ExportMenu,
                   AIPromptBar, PlaybackBar, StatusBar, ZoomControl,
+                  Explorer.tsx (projects and their files),
                   DockView.tsx (positions panes, drag-to-dock, tabs),
                   Splitter.tsx (both axes), PaneRail.tsx,
                   ContextMenu.tsx + menus.ts (the right-click menu definitions),
@@ -584,9 +675,31 @@ npm run lint
 npm run build
 ```
 
+## Deploying
+
+A static SPA with no router and no server side, so the build output is the whole
+deployment. Pushing to `main` builds and publishes to GitHub Pages
+(`.github/workflows/deploy.yml`); every pull request runs typecheck, lint, tests
+and a build first (`.github/workflows/ci.yml`).
+
+Pages serves from `/<repo>/` rather than the domain root, so a production build
+bakes in `base: '/seqflow/'`. Hosting at the root of your own domain instead:
+
+```bash
+SEQFLOW_BASE=/ npm run build
+```
+
+Dev is unaffected — the base only applies to `vite build`.
+
 ## Non-goals
 
 No collaboration, no server-side persistence, no accounts, no auth, and no attempt
 at production-correct CDK. Contracts are documentation and scaffolding: the app does
 not validate live traffic against them and does not stand up a mock server. It is a
 fast, local, single-player tool.
+
+---
+
+## Licence
+
+[MIT](LICENSE).

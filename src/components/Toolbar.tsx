@@ -14,6 +14,15 @@ import { ProjectMenu } from './ProjectMenu'
 import { ViewMenu } from './ViewMenu'
 import { TemplateGallery } from './TemplateGallery'
 
+/**
+ * AI-assist is the one feature that needs a process beyond the static SPA — a
+ * local proxy holding the Anthropic key. A hosted build has no proxy to reach,
+ * so the prompt bar would be a button that can only fail. It is on by default
+ * in dev and off in a build unless you opt in with VITE_AI_ASSIST=true, which
+ * is what you want when self-hosting the app alongside your own proxy.
+ */
+const AI_ASSIST = import.meta.env.DEV || import.meta.env.VITE_AI_ASSIST === 'true'
+
 export function Toolbar({ onToast }: { onToast: (m: string) => void }) {
   const undo = useStore((s) => s.undo)
   const redo = useStore((s) => s.redo)
@@ -93,7 +102,7 @@ export function Toolbar({ onToast }: { onToast: (m: string) => void }) {
       </button>
 
       <span className="spacer" />
-      <AIPromptBar onToast={onToast} />
+      {AI_ASSIST && <AIPromptBar onToast={onToast} />}
       <span className="spacer" />
 
       <button className="btn" onClick={() => fileInput.current?.click()}>
