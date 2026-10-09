@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse } from '../dsl/parser'
 import { allCriteria, buildTickets, type Story, type Ticket } from './tickets'
@@ -291,10 +293,24 @@ contract Check {
   })
 })
 
-describe('the real project', () => {
-  it('derives stories and tickets without raising one for Bedrock', async () => {
-    const { readFileSync } = await import('node:fs')
-    const dsl = readFileSync('projects/recruit-plagiarism-sync-with-schema.dsl', 'utf8')
+/**
+ * `projects/` is local design work and is gitignored, so a fresh clone has none.
+ * This case is worth keeping anyway: it runs the generator over a real, large
+ * diagram rather than a fixture written to suit it. It skips where the file is
+ * absent, and the path resolves from this module so it does not depend on the
+ * working directory the runner happens to start in.
+ */
+const REAL_PROJECT = join(
+  import.meta.dirname,
+  '..',
+  '..',
+  'projects',
+  'recruit-plagiarism-sync-with-schema.dsl',
+)
+
+describe.skipIf(!existsSync(REAL_PROJECT))('the real project', () => {
+  it('derives stories and tickets without raising one for Bedrock', () => {
+    const dsl = readFileSync(REAL_PROJECT, 'utf8')
     const s = buildTickets(parse(dsl).doc, 'Upload a campaign workbook')
     expect(titles(s)).toEqual([
       'Upload a campaign workbook',
