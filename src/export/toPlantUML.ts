@@ -17,6 +17,7 @@ const PLANTUML_KEYWORD: Partial<Record<ParticipantKind, string>> = {
   'aws:sqs': 'queue',
   'aws:sns': 'queue',
   'aws:kinesis': 'queue',
+  'aws:firehose': 'queue',
   'aws:eventbridge': 'queue',
   'aws:msk': 'queue',
   'aws:mq': 'queue',
@@ -28,9 +29,14 @@ const PLANTUML_KEYWORD: Partial<Record<ParticipantKind, string>> = {
   'aws:knowledgebase': 'database',
   'aws:cloudfront': 'boundary',
   'aws:waf': 'boundary',
+  'aws:alb': 'boundary',
   'aws:bedrock': 'entity',
   'aws:bedrockagent': 'control',
   'aws:sagemaker': 'entity',
+  'aws:iam': 'control',
+  'aws:verifiedpermissions': 'control',
+  'aws:codedeploy': 'control',
+  'aws:ecr': 'database',
 }
 
 const PLANTUML_ARROW: Record<MessageStyle, string> = {

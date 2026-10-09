@@ -14,6 +14,7 @@ import { STATUS_BY_CODE } from '../contracts/unhappyPathRules'
 import { TRANSPORTS } from '../contracts/contractStore'
 import { usedContracts } from './toOpenApi'
 import { summaryStats, type SummaryStats } from './reportSummary'
+import { allCriteria, buildTickets } from './tickets'
 
 /**
  * The design-review document, assembled from what the app already measures.
@@ -40,6 +41,7 @@ export type SectionId =
   | 'outcomes'
   | 'coverage'
   | 'data'
+  | 'tickets'
 
 export const ALL_SECTIONS: SectionId[] = [
   'glance',
@@ -48,6 +50,7 @@ export const ALL_SECTIONS: SectionId[] = [
   'outcomes',
   'coverage',
   'data',
+  'tickets',
 ]
 
 export const SECTION_LABEL: Record<SectionId, string> = {
@@ -57,6 +60,7 @@ export const SECTION_LABEL: Record<SectionId, string> = {
   outcomes: 'Outcomes',
   coverage: 'Failure coverage',
   data: 'Data and contracts',
+  tickets: 'Delivery tickets',
 }
 
 export const SECTION_HINT: Record<SectionId, string> = {
@@ -66,6 +70,7 @@ export const SECTION_HINT: Record<SectionId, string> = {
   outcomes: 'Every distinct path through the flow',
   coverage: 'Which declared failures are modelled, and the gaps',
   data: 'Schema diagram, table columns, contract definitions',
+  tickets: 'BDD tickets per story and microservice, happy and unhappy criteria',
 }
 
 /** Which diagram each section needs captured, for the capture step to read. */
@@ -105,6 +110,12 @@ export interface ReportInput {
   savedAt?: string
   generatedAt: Date
   sections: SectionId[]
+  /**
+   * Title for the story made of everything outside a top-level opt/loop. That
+   * run has no block label to borrow, so it is the one story the diagram
+   * cannot name for itself.
+   */
+  rootStoryTitle?: string
   errors?: ParseIssue[]
   warnings?: ParseIssue[]
   /** Diagrams the capture step actually managed to get. */
@@ -146,6 +157,7 @@ export function buildReport(input: ReportInput): ReportDocument {
   if (wanted.has('outcomes')) pushOutcomes(blocks, input)
   if (wanted.has('coverage')) pushCoverage(blocks, input, stats)
   if (wanted.has('data')) pushData(blocks, input, captured)
+  if (wanted.has('tickets')) pushTickets(blocks, input)
 
   return { title, subtitle: 'Architecture design review', byline: byline(input), blocks, stats }
 }
@@ -734,6 +746,110 @@ function keyRole(table: DatabaseTable, column: string): string {
   if (pk) return 'PK'
   if (fk) return `FK → ${fk.refTable}.${fk.refColumn}`
   return '—'
+}
+
+/* -------------------------------------------------------- delivery tickets */
+
+function pushTickets(blocks: ReportBlock[], input: ReportInput): void {
+  const stories = buildTickets(input.doc, input.rootStoryTitle)
+  blocks.push({ kind: 'heading', level: 1, text: SECTION_LABEL.tickets })
+
+  if (!stories.length) {
+    blocks.push({
+      kind: 'para',
+      text: 'There are no steps to raise tickets from yet. A story is a top-level opt or loop block plus whatever is left at the top level, and none of those carry a step in this document.',
+    })
+    return
+  }
+
+  const tickets = stories.flatMap((s) => s.tickets)
+  const unmodelled = tickets.reduce(
+    (n, t) => n + allCriteria(t).filter((c) => c.unmodelled).length,
+    0,
+  )
+
+  blocks.push({
+    kind: 'para',
+    text: `${count(stories.length, 'story')} and ${count(
+      tickets.length,
+      'ticket',
+    )}, derived from the diagram rather than written by hand. A story is a journey the document already groups; within it, one ticket per component that carries work. Each ticket is a sequence: one scenario per interaction in diagram order, carrying the failures declared on that interaction, with each step's Given being the previous step's success — so a call has to land before the next one is reached. A component you call but do not build — a model endpoint, anything marked external — gets no ticket, because consuming it is work inside the caller's ticket.`,
+  })
+
+  if (unmodelled) {
+    blocks.push({
+      kind: 'callout',
+      tone: 'warn',
+      text: `${count(unmodelled, 'acceptance criterion')} ${
+        unmodelled === 1 ? 'comes' : 'come'
+      } from a failure the contracts declare but no branch in the diagram draws. They are included because a developer still has to handle them, and each is marked so the intended behaviour can be settled before the ticket is estimated.`,
+    })
+  }
+
+  blocks.push({
+    kind: 'table',
+    caption: 'Tickets by story and component',
+    head: ['Story', 'Component', 'Scope'],
+    rows: stories.flatMap((s) =>
+      s.tickets.length
+        ? s.tickets.map((t) => [
+            s.title,
+            t.participantLabel,
+            `${count(t.steps.length, 'step')}, ${allCriteria(t).length} criteria`,
+          ])
+        : [[s.title, 'nothing built here', '0']],
+    ),
+  })
+
+  for (const story of stories) {
+    blocks.push({ kind: 'heading', level: 2, text: story.title })
+    blocks.push({ kind: 'para', text: story.narrative })
+    if (!story.tickets.length) {
+      blocks.push({
+        kind: 'para',
+        text: 'Every participant in this story is a component you call rather than build, so it raises no ticket.',
+      })
+      continue
+    }
+    for (const ticket of story.tickets) {
+      blocks.push({ kind: 'heading', level: 3, text: ticket.summary })
+      if (ticket.responsibilities.length) {
+        blocks.push({ kind: 'bullets', items: ticket.responsibilities })
+      }
+      if (ticket.contracts.length) {
+        blocks.push({ kind: 'para', text: `Contracts: ${joinList(ticket.contracts)}.` })
+      }
+      if (ticket.steps.length) {
+        blocks.push({
+          kind: 'table',
+          caption: `Acceptance criteria — ${ticket.summary}`,
+          head: ['Step', 'Scenario', 'Given', 'When', 'Then'],
+          rows: ticket.steps.flatMap((step) => [
+            [
+              String(step.index),
+              step.onFailurePath
+                ? `${step.happy.scenario} — recovery, on the "${step.onFailurePath}" path`
+                : step.happy.scenario,
+              step.happy.given,
+              step.happy.when,
+              step.happy.then.join('; and '),
+            ],
+            // Indented under the step they belong to, so a failure reads as
+            // this call's failure rather than the component's in general. The
+            // number repeats rather than blanking: no empty cells, and the
+            // grouping survives the table splitting across pages.
+            ...step.unhappy.map((c) => [
+              String(step.index),
+              `↳ ${c.unmodelled ? `${c.scenario} (no path drawn)` : c.scenario}`,
+              c.given,
+              c.when,
+              c.then.join('; and '),
+            ]),
+          ]),
+        })
+      }
+    }
+  }
 }
 
 /* ----------------------------------------------------------------- helpers */

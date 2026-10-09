@@ -346,6 +346,72 @@ const ICONS: Record<ParticipantKind, JSX.Element> = {
       <path d="M6.6 12.6h3l1.8-3.4 2 6 1.6-2.6h2.4" />
     </g>
   ),
+  /* ---------------------------------------------------------------- added */
+  // One entry point fanning out to a target group. Deliberately not a shield
+  // or a gateway: a balancer does not inspect or transform, it only chooses.
+  'aws:alb': (
+    <g {...S}>
+      <path d="M2.8 12h2.6" />
+      <rect x="5.4" y="8.8" width="4.8" height="6.4" rx="1.4" />
+      <path d="M10.2 12h2.4" />
+      <path d="M12.6 12c2 0 1.6-6 3.6-6" />
+      <path d="M12.6 12h3.6" />
+      <path d="M12.6 12c2 0 1.6 6 3.6 6" />
+      <rect x="16.2" y="4" width="4.8" height="4" rx="1.2" />
+      <rect x="16.2" y="10" width="4.8" height="4" rx="1.2" />
+      <rect x="16.2" y="16" width="4.8" height="4" rx="1.2" />
+    </g>
+  ),
+  // Many producers converging into one nozzle that drips into a destination.
+  // Kinesis is three free-running waves; a delivery stream buffers and lands.
+  'aws:firehose': (
+    <g {...S}>
+      <path d="M2.6 6.6l4.6 3.4M2.6 17.4l4.6-3.4M2.6 12h4.6" />
+      <path d="M7.2 9.4h5.4l3 2.6-3 2.6H7.2z" />
+      <path d="M18.4 8.8c1.6 1.9 2.4 3.1 2.4 4.1a2.4 2.4 0 0 1-4.8 0c0-1 .8-2.2 2.4-4.1z" />
+    </g>
+  ),
+  // A policy document with a decision on it. Not a shield — WAF and Cognito
+  // already own that silhouette, and a policy store decides rather than blocks.
+  'aws:verifiedpermissions': (
+    <g {...S}>
+      <path d="M5.4 3.4h9l4.2 4.2v13H5.4z" />
+      <path d="M14.4 3.4v4.2h4.2" />
+      <path d="M8.4 13.2l2.4 2.4 4.6-5" />
+    </g>
+  ),
+  // An identity badge. KMS is the key in this set, so IAM is who you are
+  // rather than what you can unlock.
+  'aws:iam': (
+    <g {...S}>
+      <rect x="3.2" y="4.6" width="17.6" height="14.8" rx="2.4" />
+      <circle cx="8.8" cy="10.2" r="2.2" />
+      <path d="M5.4 16.2a3.6 3.6 0 0 1 6.8 0" />
+      <path d="M14.8 9.4h4.2M14.8 12.4h4.2M14.8 15.4h2.6" />
+    </g>
+  ),
+  // A sealed package. ECS is flat boxes on a host; a registry holds one
+  // immutable artefact, so this is a single closed volume.
+  'aws:ecr': (
+    <g {...S}>
+      <path d="M12 3.2l7.6 4.2v9.2L12 20.8 4.4 16.6V7.4z" />
+      <path d="M4.4 7.4L12 11.6l7.6-4.2" />
+      <path d="M12 11.6v9.2" />
+    </g>
+  ),
+  // Traffic splitting between two task sets, shifting toward the new one.
+  'aws:codedeploy': (
+    <g {...S}>
+      <path d="M2.8 12h3.2" />
+      <path d="M6 12c1.8 0 1.4-5.2 3.2-5.2M6 12c1.8 0 1.4 5.2 3.2 5.2" />
+      <rect x="9.2" y="3.4" width="11.4" height="6.6" rx="1.6" />
+      <rect x="9.2" y="14" width="11.4" height="6.6" rx="1.6" />
+      <path d="M12 6.7h4.4" />
+      <path d="M16.4 5.5l1.4 1.2-1.4 1.2" />
+      <path d="M12 17.3h5.8" />
+    </g>
+  ),
+
   'aws:xray': (
     <g {...S}>
       <circle cx="12" cy="12" r="2.2" />

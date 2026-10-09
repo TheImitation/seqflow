@@ -124,6 +124,7 @@ const KIND_TRANSPORT: Partial<Record<ParticipantKind, Transport>> = {
   'aws:sns': 'sns',
   'aws:eventbridge': 'eventbridge',
   'aws:kinesis': 'kinesis',
+  'aws:firehose': 'kinesis',
   'aws:msk': 'generic-async',
   'aws:mq': 'generic-async',
 }
@@ -873,6 +874,413 @@ function targetKindSuggestions(kind: ParticipantKind | undefined): UnhappySugges
           defaultChecked: false,
         },
       ]
+    case 'aws:alb':
+      return [
+        {
+          id: 'alb-503',
+          shape: 'alt',
+          label: '503 ServiceUnavailable',
+          description:
+            'No healthy target in the group. The balancer answers itself — nothing reached your code, so there is no application log to find.',
+          group: 'Load balancer',
+          steps: [
+            {
+              kind: 'message',
+              from: 'target',
+              to: 'source',
+              label: 'no healthy targets',
+              style: 'async',
+            },
+          ],
+          response: { code: '503', label: 'ServiceUnavailable' },
+          defaultChecked: true,
+        },
+        {
+          id: 'alb-504',
+          shape: 'alt',
+          label: '504 GatewayTimeout',
+          description:
+            'The target did not respond within the idle timeout. The usual cause of a truncated stream: a long response needs the idle timeout raised above the longest quiet gap in it.',
+          group: 'Load balancer',
+          steps: [
+            {
+              kind: 'note',
+              over: ['source', 'target'],
+              text: 'idle timeout elapsed with no bytes sent',
+            },
+            {
+              kind: 'message',
+              from: 'target',
+              to: 'source',
+              label: 'GatewayTimeout',
+              style: 'async',
+            },
+          ],
+          response: { code: '504', label: 'GatewayTimeout' },
+          defaultChecked: true,
+        },
+        {
+          id: 'alb-502',
+          shape: 'alt',
+          label: '502 BadGateway',
+          description:
+            'The target closed the connection or sent a malformed response — often a container exiting mid-request during a deployment.',
+          group: 'Load balancer',
+          steps: [
+            { kind: 'message', from: 'target', to: 'source', label: 'BadGateway', style: 'async' },
+          ],
+          response: { code: '502', label: 'BadGateway' },
+          defaultChecked: false,
+        },
+      ]
+    case 'aws:iam':
+      return [
+        {
+          id: 'iam-denied',
+          shape: 'alt',
+          label: '403 AccessDenied',
+          description:
+            'The trust policy conditions were not all satisfied. Every condition is an AND, so one mismatched claim denies the whole assumption.',
+          group: 'IAM',
+          steps: [
+            {
+              kind: 'message',
+              from: 'target',
+              to: 'source',
+              label: 'AccessDenied',
+              style: 'async',
+            },
+          ],
+          response: { code: '403', label: 'AccessDenied' },
+          defaultChecked: true,
+        },
+        {
+          id: 'iam-invalid-token',
+          shape: 'alt',
+          label: '400 InvalidIdentityToken',
+          description:
+            'The web identity token is malformed, expired, or its audience does not match the provider.',
+          group: 'IAM',
+          steps: [
+            {
+              kind: 'message',
+              from: 'target',
+              to: 'source',
+              label: 'InvalidIdentityToken',
+              style: 'async',
+            },
+          ],
+          response: { code: '400', label: 'InvalidIdentityToken' },
+          defaultChecked: true,
+        },
+        {
+          id: 'iam-expired',
+          shape: 'opt',
+          label: 'credentials expired mid-task (unhappy)',
+          description:
+            'A role session is finite. Work that outlives it must re-assume rather than fail — the failure appears as an unrelated AccessDenied partway through.',
+          group: 'IAM',
+          steps: [
+            {
+              kind: 'message',
+              from: 'target',
+              to: 'source',
+              label: 'ExpiredToken',
+              style: 'async',
+            },
+            {
+              kind: 'message',
+              from: 'source',
+              to: 'target',
+              label: 'Re-assume the role',
+              style: 'sync',
+            },
+          ],
+          response: { code: 'ExpiredToken', label: 'Session expired mid-task' },
+          defaultChecked: false,
+        },
+      ]
+    case 'aws:verifiedpermissions':
+      return [
+        {
+          id: 'avp-deny',
+          shape: 'alt',
+          label: '403 Deny',
+          description:
+            'The policy store refused. The determining policy id comes back with the decision and belongs in the audit row — a deny without the rule that caused it cannot be reviewed.',
+          group: 'Authorization',
+          steps: [
+            {
+              kind: 'message',
+              from: 'target',
+              to: 'source',
+              label: 'Deny with determiningPolicyIds',
+              style: 'async',
+            },
+          ],
+          response: { code: '403', label: 'Deny' },
+          defaultChecked: true,
+        },
+        {
+          id: 'avp-throttle',
+          shape: 'alt',
+          label: '429 ThrottlingException',
+          description:
+            'Evaluation rate exceeded. Batch the evaluations and cache the decision set rather than calling once per control.',
+          group: 'Authorization',
+          steps: [
+            {
+              kind: 'message',
+              from: 'target',
+              to: 'source',
+              label: 'ThrottlingException',
+              style: 'async',
+            },
+          ],
+          response: { code: '429', label: 'ThrottlingException' },
+          defaultChecked: true,
+        },
+        {
+          id: 'avp-unavailable',
+          shape: 'alt',
+          label: '503 PolicyStoreUnavailable',
+          description:
+            'The store cannot be reached. Fail closed: an authorization component that allows when it cannot decide is worse than one that is down.',
+          group: 'Authorization',
+          steps: [
+            {
+              kind: 'note',
+              over: ['source'],
+              text: 'fail closed — refuse rather than allow an undecided request',
+            },
+            {
+              kind: 'message',
+              from: 'source',
+              to: 'source',
+              label: 'Refuse the request',
+              style: 'sync',
+            },
+          ],
+          response: { code: '503', label: 'PolicyStoreUnavailable' },
+          defaultChecked: false,
+        },
+      ]
+    case 'aws:ecr':
+      return [
+        {
+          id: 'ecr-immutable',
+          shape: 'alt',
+          label: '409 ImageTagAlreadyExists',
+          description:
+            'The repository has immutable tags and this one is taken. That is the feature working: a tag is a pointer, and a deployment should reference the digest.',
+          group: 'Registry',
+          steps: [
+            {
+              kind: 'message',
+              from: 'target',
+              to: 'source',
+              label: 'ImageTagAlreadyExistsException',
+              style: 'async',
+            },
+          ],
+          response: { code: '409', label: 'ImageTagAlreadyExists' },
+          defaultChecked: true,
+        },
+        {
+          id: 'ecr-denied',
+          shape: 'alt',
+          label: '403 AccessDenied',
+          description:
+            'The role cannot push or pull here — usually a cross-account repository policy rather than the role policy.',
+          group: 'Registry',
+          steps: [
+            {
+              kind: 'message',
+              from: 'target',
+              to: 'source',
+              label: 'AccessDenied',
+              style: 'async',
+            },
+          ],
+          response: { code: '403', label: 'AccessDenied' },
+          defaultChecked: true,
+        },
+        {
+          id: 'ecr-scan',
+          shape: 'opt',
+          label: 'critical finding blocks the build (unhappy)',
+          description:
+            'The scan on push found a critical vulnerability. The pipeline stops here with the package and its fixed version, rather than at deploy.',
+          group: 'Registry',
+          steps: [
+            {
+              kind: 'message',
+              from: 'target',
+              to: 'source',
+              label: 'Scan findings with severity',
+              style: 'async',
+            },
+            {
+              kind: 'note',
+              over: ['source'],
+              text: 'build fails before the image is ever deployable',
+            },
+          ],
+          response: { code: 'scan', label: 'CriticalVulnerability' },
+          defaultChecked: false,
+        },
+      ]
+    case 'aws:codedeploy':
+      return [
+        {
+          id: 'codedeploy-alarm',
+          shape: 'opt',
+          label: 'alarm fired during the bake (unhappy)',
+          description:
+            'An alarm in the deployment group breached while the canary was live. The alarm is the rollback trigger, not a human.',
+          group: 'Deployment',
+          steps: [
+            {
+              kind: 'note',
+              over: ['source', 'target'],
+              text: 'canary at 10% for the bake window',
+            },
+            {
+              kind: 'message',
+              from: 'target',
+              to: 'source',
+              label: 'Alarm in breach, rolling back',
+              style: 'async',
+            },
+            {
+              kind: 'message',
+              from: 'target',
+              to: 'target',
+              label: 'Shift traffic back to the original task set',
+              style: 'sync',
+            },
+          ],
+          response: { code: 'rollback', label: 'RolledBackByAlarm' },
+          defaultChecked: true,
+        },
+        {
+          id: 'codedeploy-bake-timeout',
+          shape: 'alt',
+          label: '504 BakeTimeout',
+          description:
+            'The bake window elapsed without the deployment being allowed to continue. Treated as a failure so an unattended deployment never sits half-shifted.',
+          group: 'Deployment',
+          steps: [
+            {
+              kind: 'message',
+              from: 'target',
+              to: 'source',
+              label: 'BakeTimeout',
+              style: 'async',
+            },
+          ],
+          response: { code: '504', label: 'BakeTimeout' },
+          defaultChecked: false,
+        },
+        {
+          id: 'codedeploy-failed',
+          shape: 'alt',
+          label: 'deployment failed',
+          description:
+            'The replacement task set never became healthy — the image did not start, or the health check path is wrong.',
+          group: 'Deployment',
+          steps: [
+            {
+              kind: 'message',
+              from: 'target',
+              to: 'source',
+              label: 'Replacement task set never healthy',
+              style: 'async',
+            },
+          ],
+          response: { code: 'failed', label: 'DeploymentFailed' },
+          defaultChecked: true,
+        },
+      ]
+    case 'aws:firehose':
+      return [
+        {
+          id: 'firehose-throughput',
+          shape: 'alt',
+          label: '503 ServiceUnavailableException',
+          description:
+            'The delivery stream is over its throughput limit. Retry with backoff; a stream that is permanently over it needs a quota increase, not a longer retry.',
+          group: 'Firehose',
+          steps: [
+            {
+              kind: 'message',
+              from: 'target',
+              to: 'source',
+              label: 'ServiceUnavailableException',
+              style: 'async',
+            },
+            {
+              kind: 'message',
+              from: 'source',
+              to: 'source',
+              label: 'Retry with exponential backoff',
+              style: 'sync',
+            },
+          ],
+          response: { code: '503', label: 'ServiceUnavailableException' },
+          defaultChecked: true,
+        },
+        {
+          id: 'firehose-delivery',
+          shape: 'opt',
+          label: 'delivery to the destination failed (unhappy)',
+          description:
+            'Buffered records could not be written. They land under the error prefix in the backup bucket rather than being lost — which is the only reason a usage stream can be trusted.',
+          group: 'Firehose',
+          steps: [
+            {
+              kind: 'message',
+              from: 'target',
+              to: 'target',
+              label: 'Retry for the retry duration',
+              style: 'sync',
+            },
+            {
+              kind: 'message',
+              from: 'target',
+              to: 'dlq',
+              label: 'Write to the error output prefix',
+              style: 'sync',
+            },
+          ],
+          response: { code: 'DLQ', label: 'DeliveryFailed, written to the error prefix' },
+          needsParticipant: {
+            idHint: 'ErrorBucket',
+            labelHint: 'Failed delivery prefix',
+            kind: 'aws:s3' as ParticipantKind,
+          },
+          defaultChecked: true,
+        },
+        {
+          id: 'firehose-transform',
+          shape: 'alt',
+          label: 'transformation failed',
+          description:
+            'The transform Lambda returned a malformed result or timed out. Those records go to the error prefix too, tagged with the processing failure.',
+          group: 'Firehose',
+          steps: [
+            {
+              kind: 'message',
+              from: 'target',
+              to: 'source',
+              label: 'ProcessingFailed',
+              style: 'async',
+            },
+          ],
+          response: { code: 'ProcessingFailed', label: 'Transformation failed' },
+          defaultChecked: false,
+        },
+      ]
     default:
       return []
   }
@@ -932,6 +1340,7 @@ const BROKER_KINDS = new Set<ParticipantKind>([
   'aws:sns',
   'aws:eventbridge',
   'aws:kinesis',
+  'aws:firehose',
   'aws:msk',
   'aws:mq',
 ])

@@ -61,7 +61,9 @@ export function Editor({ revealLine }: { revealLine?: number }) {
   const text = useStore((s) => s.text)
   const errors = useStore((s) => s.errors)
   const setText = useStore((s) => s.setText)
+  const projectId = useStore((s) => s.projectId)
   const playingLineNo = usePlayingLine()
+  const seenProject = useRef<string | null>(null)
 
   const extensions: Extension[] = useMemo(
     () => [
@@ -104,9 +106,26 @@ export function Editor({ revealLine }: { revealLine?: number }) {
 
   // Push store -> editor, but only when they have actually diverged (an undo,
   // a canvas edit, a template load) so typing is never interrupted.
+  //
+  // A project switch takes the other branch, because it is not a divergence —
+  // it is a different document. `setState` replaces the whole state and throws
+  // away CodeMirror's own undo history with it; a `dispatch` would leave that
+  // history in place, and ⌘Z with the caret in the editor would then walk back
+  // into the previous project and paste its text into this one. That is the
+  // exact leak `openProject` clears the store's `past`/`future` to prevent, and
+  // the editor kept its own copy of it.
   useEffect(() => {
     const instance = view.current
     if (!instance) return
+
+    if (projectId !== seenProject.current) {
+      seenProject.current = projectId
+      applying.current = true
+      instance.setState(EditorState.create({ doc: text, extensions }))
+      applying.current = false
+      return
+    }
+
     const current = instance.state.doc.toString()
     if (current === text) return
 
@@ -116,7 +135,7 @@ export function Editor({ revealLine }: { revealLine?: number }) {
       selection: { anchor: Math.min(instance.state.selection.main.anchor, text.length) },
     })
     applying.current = false
-  }, [text])
+  }, [text, projectId, extensions])
 
   useEffect(() => {
     const instance = view.current

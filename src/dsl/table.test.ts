@@ -106,3 +106,52 @@ table Applicants @RDS "one row per applicant" {
     expect(m.fields[1].children?.[0]).toMatchObject({ name: 'c', type: 'number' })
   })
 })
+
+describe('int and float columns', () => {
+  const SRC = `sequenceDiagram
+  participant RDS : aws:rds
+
+table matches @RDS "numeric keys, real-valued scores" {
+  match_id: int required
+  application_id: int required
+  attempts: int required = 0
+  cosine_score: float
+  trigram_score: float required
+  trace_id: string
+
+  primaryKey: match_id
+}`
+
+  it('parses both, and survives a round trip', () => {
+    const r = expectRoundTrip(SRC)
+    const cols = r.doc.tables[0].columns
+    expect(cols.map((c) => `${c.name}:${c.type}`)).toEqual([
+      'match_id:int',
+      'application_id:int',
+      'attempts:int',
+      'cosine_score:float',
+      'trigram_score:float',
+      'trace_id:string',
+    ])
+  })
+
+  it('keeps a default on an int column', () => {
+    const attempts = parse(SRC).doc.tables[0].columns.find((c) => c.name === 'attempts')!
+    expect(attempts.example).toBe(0)
+    expect(attempts.required).toBe(true)
+  })
+
+  it('distinguishes the two in JSON Schema, unlike a bare number', async () => {
+    const { fieldSchema } = await import('../export/jsonSchema')
+    const cols = parse(SRC).doc.tables[0].columns
+    const of = (name: string) => fieldSchema(cols.find((c) => c.name === name)!)
+    // The whole point of the split: a score stored as an integer is destroyed.
+    expect(of('match_id')).toMatchObject({ type: 'integer' })
+    expect(of('cosine_score')).toMatchObject({ type: 'number' })
+  })
+
+  it('leaves an unknown type as an error rather than guessing', () => {
+    const r = parse(SRC.replace('cosine_score: float', 'cosine_score: decimal'))
+    expect(r.errors.length).toBeGreaterThan(0)
+  })
+})

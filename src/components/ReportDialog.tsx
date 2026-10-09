@@ -41,6 +41,7 @@ export function ReportDialog({
   const [sections, setSections] = useState<SectionId[]>(ALL_SECTIONS)
   const [title, setTitle] = useState(projectName === 'Untitled' ? '' : projectName)
   const [author, setAuthor] = useState('')
+  const [rootStoryTitle, setRootStoryTitle] = useState('')
   const [pageSize, setPageSize] = useState<PageSize>('a4')
   const [busy, setBusy] = useState<string | null>(null)
   const [result, setResult] = useState<{
@@ -84,6 +85,7 @@ export function ReportDialog({
         projectName,
         documentTitle: title,
         author,
+        rootStoryTitle,
         createdAt: summary?.createdAt,
         savedAt: summary?.savedAt,
         generatedAt: new Date(),
@@ -179,6 +181,17 @@ export function ReportDialog({
               </span>
             </label>
           ))}
+
+          {sections.includes('tickets') && (
+            <label className="report-field">
+              <span>Main story title</span>
+              <input
+                value={rootStoryTitle}
+                onChange={(e) => setRootStoryTitle(e.target.value)}
+                placeholder="Named from its first step if left blank"
+              />
+            </label>
+          )}
 
           {result && (
             <div className="report-result">

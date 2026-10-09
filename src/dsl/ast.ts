@@ -19,11 +19,13 @@ export const AWS_KINDS = [
   'aws:appsync',
   'aws:cloudfront',
   'aws:waf',
+  'aws:alb',
   // Messaging
   'aws:sqs',
   'aws:sns',
   'aws:eventbridge',
   'aws:kinesis',
+  'aws:firehose',
   'aws:msk',
   'aws:mq',
   // Storage & data
@@ -48,10 +50,15 @@ export const AWS_KINDS = [
   'aws:rekognition',
   // Security & ops
   'aws:cognito',
+  'aws:verifiedpermissions',
+  'aws:iam',
   'aws:secretsmanager',
   'aws:kms',
   'aws:cloudwatch',
   'aws:xray',
+  // Delivery
+  'aws:ecr',
+  'aws:codedeploy',
 ] as const
 
 export const PLAIN_KINDS = ['service', 'client', 'database', 'external'] as const
@@ -86,7 +93,7 @@ export const KIND_GROUPS: { label: string; kinds: readonly ParticipantKind[] }[]
   },
   {
     label: 'API & edge',
-    kinds: ['aws:apigateway', 'aws:appsync', 'aws:cloudfront', 'aws:waf'],
+    kinds: ['aws:apigateway', 'aws:appsync', 'aws:cloudfront', 'aws:waf', 'aws:alb'],
   },
   {
     label: 'Messaging',
@@ -95,6 +102,7 @@ export const KIND_GROUPS: { label: string; kinds: readonly ParticipantKind[] }[]
       'aws:sns',
       'aws:eventbridge',
       'aws:kinesis',
+      'aws:firehose',
       'aws:msk',
       'aws:mq',
     ],
@@ -131,11 +139,20 @@ export const KIND_GROUPS: { label: string; kinds: readonly ParticipantKind[] }[]
     label: 'Security & ops',
     kinds: [
       'aws:cognito',
+      'aws:verifiedpermissions',
+      'aws:iam',
       'aws:secretsmanager',
       'aws:kms',
       'aws:cloudwatch',
       'aws:xray',
     ],
+  },
+  {
+    // Build and release participants. They only appear in pipeline diagrams,
+    // but a pipeline is a sequence like any other and deserves real lifelines
+    // rather than a note saying "and then CI deploys it".
+    label: 'Delivery',
+    kinds: ['aws:ecr', 'aws:codedeploy'],
   },
 ]
 
@@ -232,7 +249,17 @@ export interface Note {
 
 export type FieldType =
   | 'string'
+  /**
+   * A number of unstated precision. Right for a JSON payload, where there is
+   * one number type and nothing to choose between — but in a `table` block
+   * prefer `int` or `float`, because a column has to pick one and a score
+   * stored as a whole number is silently destroyed.
+   */
   | 'number'
+  /** A whole number: keys, counts, ordinals, offsets. */
+  | 'int'
+  /** A real number: similarity scores and anything else a model emits. */
+  | 'float'
   | 'boolean'
   | 'object'
   | 'array'

@@ -6,7 +6,7 @@ const DECL = /^(model|contract|table)\b/
 const CONTRACT_KEY =
   /^(transport|method|path|model|body|headers|responses|primaryKey|foreignKey|index)\s*:/
 const MODIFIER = /^(required|optional|as|over|of|left|right)\b/
-const TYPE = /^(string|number|boolean|object|array|date|enum|vector)\b/
+const TYPE = /^(string|number|int|float|boolean|object|array|date|enum|vector)\b/
 const KIND = /^aws:[a-z]+\b/
 const ARROW = /^(-->>|--x|--\)|-->|->>|-x|-\)|->)/
 const STATUS = /^[1-5]\d{2}\b/

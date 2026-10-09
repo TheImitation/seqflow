@@ -54,14 +54,15 @@ makes architecture inference and AWS-awareness possible:
 |---|---|
 | General | `service` `client` `database` `external` |
 | Compute | `aws:lambda` `aws:ecs` `aws:eks` `aws:batch` `aws:apprunner` `aws:stepfunctions` |
-| API & edge | `aws:apigateway` `aws:appsync` `aws:cloudfront` `aws:waf` |
-| Messaging | `aws:sqs` `aws:sns` `aws:eventbridge` `aws:kinesis` `aws:msk` `aws:mq` |
+| API & edge | `aws:apigateway` `aws:appsync` `aws:cloudfront` `aws:waf` `aws:alb` |
+| Messaging | `aws:sqs` `aws:sns` `aws:eventbridge` `aws:kinesis` `aws:firehose` `aws:msk` `aws:mq` |
 | Storage & data | `aws:s3` `aws:dynamodb` `aws:rds` `aws:aurora` `aws:elasticache` `aws:neptune` `aws:redshift` `aws:athena` `aws:glue` |
 | AI & search | `aws:bedrock` `aws:bedrockagent` `aws:knowledgebase` `aws:opensearch` `aws:kendra` `aws:sagemaker` `aws:textract` `aws:comprehend` `aws:rekognition` |
-| Security & ops | `aws:cognito` `aws:secretsmanager` `aws:kms` `aws:cloudwatch` `aws:xray` |
+| Security & ops | `aws:cognito` `aws:verifiedpermissions` `aws:iam` `aws:secretsmanager` `aws:kms` `aws:cloudwatch` `aws:xray` |
+| Delivery | `aws:ecr` `aws:codedeploy` |
 
 `aws:*` participants get an AWS-orange accent in both views, so managed services
-read differently from your own at a glance. The groups are not decoration: at 43
+read differently from your own at a glance. The groups are not decoration: at 49
 kinds a flat picker is unusable, so the inspector uses `optgroup`s and the
 right-click menu nests two levels — *Change kind ▸ AI & search ▸ Bedrock*. A
 test asserts the grouping covers every kind exactly once, so a new kind cannot
@@ -70,7 +71,9 @@ go missing from the UI.
 Common abbreviations are accepted on input and normalised: `vectorsearch`,
 `vectorstore` and `aoss` all mean `aws:opensearch`; `kb` means
 `aws:knowledgebase`; `kafka` means `aws:msk`; `redis` means `aws:elasticache`;
-`pgvector` means `aws:aurora`.
+`pgvector` means `aws:aurora`; `elb`, `nlb` and `loadbalancer` all mean
+`aws:alb`; `avp` and `cedar` mean `aws:verifiedpermissions`; `sts` means
+`aws:iam`; `firehose` and `kinesis-firehose` both mean `aws:firehose`.
 
 ### Failure paths
 
@@ -251,7 +254,7 @@ lives. Three operations exist only here — there is no other way to reach them.
 | Target | Menu |
 |---|---|
 | **Arrow** | Suggest unhappy paths · **Wrap in** ▸ · Add reply · Duplicate · **Reverse direction** · Move earlier/later · Arrow style ▸ · Contract ▸ · Play from here · Copy DSL line · Delete |
-| **Participant lane / architecture node** | Change kind ▸ (all 17, ticked) · Add message to ▸ · Move left/right · Reveal in sequence · Delete (says how many messages go with it) |
+| **Participant lane / architecture node** | Change kind ▸ (grouped, ticked) · Add message to ▸ · Move left/right · Reveal in sequence · Delete (says how many messages go with it) |
 | **Block** | **Add else branch** · Change type ▸ · Mark as (unhappy) · Walk *branch* during playback · Move earlier/later · Unwrap · Delete with contents |
 | **Architecture edge** | The messages the link stands for, each selectable · Suggest unhappy paths on ▸ · Reveal in sequence |
 | **Empty canvas** | Add participant ▸ (by kind) · Layout direction ▸ (architecture) · Fit / Actual size / Zoom |
@@ -330,6 +333,12 @@ checklist with a live DSL preview. Nothing is inserted until you tick and confir
 | `aws:dynamodb` | `ConditionalCheckFailed`, `ProvisionedThroughputExceeded`, `ResourceNotFound` |
 | `aws:stepfunctions` | `States.TaskFailed` → Retry → Catch → fallback → execution Failed |
 | `aws:s3` | 403 AccessDenied, 404 NoSuchKey, 503 SlowDown |
+| `aws:alb` | 503 no healthy targets, 504 idle-timeout, 502 target closed the connection |
+| `aws:iam` | 403 AccessDenied on the trust policy, 400 InvalidIdentityToken, session expiry mid-task |
+| `aws:verifiedpermissions` | Deny with the determining policy id, throttling, policy store unavailable → fail closed |
+| `aws:ecr` | 409 immutable tag, 403 AccessDenied, critical scan finding blocks the build |
+| `aws:codedeploy` | alarm fired during the bake → rollback, bake timeout, replacement set never healthy |
+| `aws:firehose` | throughput exceeded, delivery failed → error prefix, transform Lambda failed |
 | `aws:bedrock` | throttling, context-window `ValidationException`, model timeout, guardrail intervention |
 | `aws:knowledgebase` | no passages above threshold, ingestion lag, throttling |
 | `aws:opensearch` | rejected execution, index not found, vector dimension mismatch |
