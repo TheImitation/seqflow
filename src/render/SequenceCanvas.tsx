@@ -22,7 +22,7 @@ import {
 import { ZoomControl } from '../components/ZoomControl'
 import { useZoom } from '../components/useZoom'
 import { usePlaybackEngine } from '../playback/usePlayback'
-import { PaneHideButton } from '../components/PaneRail'
+import { PaneCloseButton } from '../components/PaneRail'
 import { usePanels } from '../state/panels'
 import { Minimap } from './Minimap'
 import { useStore } from '../state/store'
@@ -328,11 +328,13 @@ export function SequenceCanvas({
 
   return (
     <section className="pane" style={style}>
-      <div className="pane-head">
-        Sequence
+      <div className="pane-head" data-head="sequence">
+        <span className="pane-title">Sequence</span>
         <span className="spacer" />
-        <ZoomControl zoom={zoom} />
-        <PaneHideButton id="sequence" />
+        <div className="pane-tools">
+          <ZoomControl zoom={zoom} />
+        </div>
+        <PaneCloseButton view="sequence" />
       </div>
       <div className="pane-body">
         <div className="canvas-scroll" ref={hostRef}>

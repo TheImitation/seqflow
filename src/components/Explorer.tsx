@@ -28,6 +28,7 @@ export function Explorer({ onToast }: { onToast: (message: string) => void }) {
   const activeId = usePanels((s) => s.activeId)
   const expanded = usePanels((s) => s.expanded)
   const toggleProject = usePanels((s) => s.toggleProject)
+  const toggleExplorer = usePanels((s) => s.toggleExplorer)
 
   const rows = useMemo(
     () =>
@@ -62,11 +63,22 @@ export function Explorer({ onToast }: { onToast: (message: string) => void }) {
   return (
     <section className="pane explorer">
       <div className="pane-head">
-        Explorer
+        <span className="pane-title">Explorer</span>
         <span className="spacer" />
         <span className="explorer-count">
           {projects.length} {projects.length === 1 ? 'project' : 'projects'}
         </span>
+        {/* Closing it leaves a rail on the left edge to bring it back — the
+            explorer used to be closable only from the View menu, and reopenable
+            only from there too. */}
+        <button
+          className="btn ghost icon pane-close"
+          onClick={toggleExplorer}
+          title="Close the explorer"
+          aria-label="Close the explorer"
+        >
+          ×
+        </button>
       </div>
 
       <div className="pane-body">

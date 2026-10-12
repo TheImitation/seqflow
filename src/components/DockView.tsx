@@ -41,6 +41,7 @@ export function DockView({
   const root = usePanels((s) => s.root)
   const resize = usePanels((s) => s.resizeSplit)
   const setActive = usePanels((s) => s.setActive)
+  const hide = usePanels((s) => s.hide)
 
   const dock = usePanels((s) => s.dockPane)
 
@@ -159,16 +160,34 @@ export function DockView({
             role="tablist"
             style={{ left: box.rect.x, top: box.rect.y, width: box.rect.w }}
           >
+            {/* Each tab carries its own ×, so a background tab can be closed
+                without first bringing it forward. Two sibling buttons rather
+                than one inside the other, which HTML does not allow. A tabbed
+                slot holds at least two panes, so a tab is never the last one
+                open and its × is never disabled. */}
             {box.panes.map((pane) => (
-              <button
+              <div
                 key={pane}
-                role="tab"
-                aria-selected={pane === box.active}
+                role="presentation"
                 className={`dock-tab${pane === box.active ? ' active' : ''}`}
-                onClick={() => setActive(box.path, pane)}
               >
-                {labelOf(pane)}
-              </button>
+                <button
+                  role="tab"
+                  aria-selected={pane === box.active}
+                  className="dock-tab-label"
+                  onClick={() => setActive(box.path, pane)}
+                >
+                  {labelOf(pane)}
+                </button>
+                <button
+                  className="dock-tab-close"
+                  onClick={() => hide(pane)}
+                  title={`Close ${labelOf(pane)}`}
+                  aria-label={`Close ${labelOf(pane)}`}
+                >
+                  ×
+                </button>
+              </div>
             ))}
           </div>
         ))}

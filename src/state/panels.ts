@@ -216,6 +216,16 @@ interface PanelStore extends Persisted {
   toggle: (id: SlotId) => void
   show: (id: SlotId) => void
   hide: (id: SlotId) => void
+  /**
+   * Bring a panel into view, or put it away if it already is.
+   *
+   * A pane has three states, so a plain toggle misfires in one of them: a pane
+   * that is open but behind another tab would be *closed* by a press meant to
+   * look at it. So closed opens, a background tab comes to the front, and only
+   * a pane that is already showing closes. The ⌘ keys and the View menu both
+   * mean this, and used to disagree about it.
+   */
+  reach: (id: SlotId) => void
   /** Move `delta`, a fraction of that split's own extent, across a boundary. */
   resizeSplit: (path: DockPath, index: number, delta: number) => void
   /** Drag-and-drop: put a slot somewhere else in the tree. */
@@ -248,6 +258,12 @@ export const usePanels = create<PanelStore>((set, get) => ({
   ...load(),
 
   toggle: (id) => (paneIds(get().root).includes(id) ? get().hide(id) : get().show(id)),
+
+  reach: (id) => {
+    const { root } = get()
+    if (paneIds(root).includes(id) && !isBackgroundTab(root, id)) get().hide(id)
+    else get().openDoc(id)
+  },
 
   show: (id) =>
     set((prev) => {

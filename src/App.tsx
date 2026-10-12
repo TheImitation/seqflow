@@ -21,8 +21,8 @@ import { PlaybackBar } from './components/PlaybackBar'
 import { DockView } from './components/DockView'
 import { StatusBar } from './components/StatusBar'
 import { Toolbar } from './components/Toolbar'
-import { PaneRail, PaneHideButton } from './components/PaneRail'
-import { findPane, isBackgroundTab, paneIds, usePanels, type SlotId } from './state/panels'
+import { ExplorerRail, PaneCloseButton, PaneRail } from './components/PaneRail'
+import { isBackgroundTab, paneIds, usePanels, type SlotId } from './state/panels'
 import {
   describeSlot,
   fileNameOf,
@@ -102,6 +102,12 @@ export default function App() {
       playFrom,
       setBranchChoice,
       suggestFor: setSuggestingFor,
+      // Opens or brings forward — never closes. "Reveal in sequence" used to
+      // only select, which did nothing you could see with the sequence closed.
+      openView: (view) => {
+        const panels = usePanels.getState()
+        panels.openDoc(makeDocId(panels.projectId, view))
+      },
       range: null,
     }),
     [doc, mutate, select, toast, copy, playFrom, setBranchChoice, setSuggestingFor],
@@ -223,34 +229,21 @@ export default function App() {
   const controls = usePlaybackControls()
   /* -------------------------------------------------------- panel shortcuts */
   /**
-   * ⌘1-4 and ⌘B used to be a plain visibility toggle. A pane now has three
-   * states, so a toggle would misfire in two of them: pressing ⌘3 to *look at*
-   * an architecture pane that is behind another tab would close it instead, and
-   * — because these shortcuts deliberately fire while typing — ⌘1 would close
-   * the editor mid-sentence.
+   * ⌘1-4 and ⌘B mean `reach` — closed opens, a background tab comes to the
+   * front, and only a pane already showing closes. The View menu means the
+   * same thing, which is why it lives on the store rather than here.
    *
-   * So: closed opens it, a background tab comes to the front, and only a pane
-   * that is already showing closes — unless the caret is inside it, in which
-   * case the press was almost certainly not meant to dismiss it.
+   * The one thing added here is the caret: these shortcuts deliberately fire
+   * while typing, so a pane the caret is inside is never closed by one — ⌘1
+   * would otherwise close the editor mid-sentence.
    */
-  const reachPanel = useCallback(
-    (id: SlotId) => {
-      const root = usePanels.getState().root
-      if (!paneIds(root).includes(id)) {
-        usePanels.getState().show(id)
-        return
-      }
-      if (isBackgroundTab(root, id)) {
-        const home = findPane(root, id)
-        if (home) usePanels.getState().setActive(home.path, id)
-        return
-      }
-      const focused = document.activeElement?.closest?.('.dock-pane') as HTMLElement | null
-      if (focused?.dataset.pane === id) return
-      usePanels.getState().hide(id)
-    },
-    [],
-  )
+  const reachPanel = useCallback((id: SlotId) => {
+    const { root, reach } = usePanels.getState()
+    const showing = paneIds(root).includes(id) && !isBackgroundTab(root, id)
+    const focused = document.activeElement?.closest?.('.dock-pane') as HTMLElement | null
+    if (showing && focused?.dataset.pane === id) return
+    reach(id)
+  }, [])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -320,12 +313,10 @@ export default function App() {
           return (
             <section className="pane">
               <div className="pane-head">
-                DSL
+                <span className="pane-title">DSL</span>
                 <span className="spacer" />
-                <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 500 }}>
-                  source of truth
-                </span>
-                <PaneHideButton id={id} />
+                <span className="pane-sub">source of truth</span>
+                <PaneCloseButton view="dsl" />
               </div>
               <div className="pane-body">
                 <Editor revealLine={revealLine} />
@@ -361,7 +352,7 @@ export default function App() {
       <Toolbar onToast={toast} />
 
       <div className="workspace">
-        {explorerOpen && <Explorer onToast={toast} />}
+        {explorerOpen ? <Explorer onToast={toast} /> : <ExplorerRail />}
         <DockView renderPane={renderPane} labelOf={labelOf} />
         {closedPanels.length > 0 && (
           <div className="rail-strip">

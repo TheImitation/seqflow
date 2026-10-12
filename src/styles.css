@@ -108,10 +108,14 @@ body {
 }
 
 /* Positioned from `computeLayout`. Never transition these: a window resize
-   drives them every frame and any easing turns it to syrup. */
+   drives them every frame and any easing turns it to syrup.
+
+   Also the container a pane head measures itself against, so it can shed its
+   tools as the pane narrows rather than pushing its close button off the edge. */
 .dock-pane {
   position: absolute;
   overflow: hidden;
+  container: pane / inline-size;
 }
 .dock-pane > .pane,
 .dock-pane > .inspector {
@@ -179,7 +183,7 @@ body {
   inset: 0 -3px;
 }
 
-/* A hidden panel leaves a rail behind, in the slot the panel occupied. */
+/* A closed panel leaves a rail behind on the workspace edge. */
 .pane-rail {
   flex: 0 0 30px;
   width: 30px;
@@ -197,10 +201,6 @@ body {
   transition: background 120ms, color 120ms;
 }
 
-.workspace > .pane-rail {
-  border-right: none;
-  border-left: 1px solid var(--border);
-}
 
 .pane-rail:hover {
   background: var(--surface-2);
@@ -220,16 +220,110 @@ body {
   text-transform: uppercase;
 }
 
-/* Sits at the far end of a pane head; stays out of the way until hovered. */
-.pane-head .pane-hide {
-  opacity: 0.45;
-  margin-right: -4px;
+/* The pane's name. It can truncate, but only as the very last resort — the
+   subtitle's far larger shrink weight below means it gives way long before. */
+.pane-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.pane-head:hover .pane-hide {
+
+/* A note on the title ("source of truth", "inferred"), not a control, so it is
+   the first thing to give way. */
+.pane-sub {
+  flex: 0 1000 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+}
+
+.pane-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.pane-head > .explorer-count {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* At the far end of every pane head, and it never gives way: the head sheds
+   its tools as the pane narrows (below), so close is always on screen. It used
+   to come last with nothing shrinking ahead of it, and at a 1024px window three
+   of the four were clipped off the edge of their own pane. */
+.pane-head .pane-close {
+  flex: 0 0 auto;
+  margin-right: -4px;
+  opacity: 0.55;
+}
+.pane-head:hover .pane-close {
   opacity: 1;
 }
-.pane-head .pane-hide:disabled {
+.pane-head .pane-close:disabled {
   opacity: 0.2;
+}
+
+/* Shedding, least useful first: the layout picker, then zoom's − and +, then
+   the rest of the tools. Each step removes a whole control rather than
+   clipping half of one, and widening the pane brings it straight back. Below
+   the last step only the title and × are left, and the title truncates before
+   the × moves.
+
+   Thresholds are per head because the heads differ by 50px or more — one set
+   sized for the widest would strip Schema of its zoom at a width where it has
+   room to spare. Each is what that head measured needing at that step, plus
+   4px. Change a head's contents and these need measuring again. */
+@container pane (max-width: 396px) {
+  .pane-head[data-head="arch"] .layout-control {
+    display: none;
+  }
+}
+@container pane (max-width: 324px) {
+  .pane-head[data-head="arch"] .zoom-step {
+    display: none;
+  }
+}
+@container pane (max-width: 262px) {
+  .pane-head[data-head="arch"] .pane-tools {
+    display: none;
+  }
+}
+
+@container pane (max-width: 345px) {
+  .pane-head[data-head="schema"] .layout-control {
+    display: none;
+  }
+}
+@container pane (max-width: 274px) {
+  .pane-head[data-head="schema"] .zoom-step {
+    display: none;
+  }
+}
+@container pane (max-width: 211px) {
+  .pane-head[data-head="schema"] .pane-tools {
+    display: none;
+  }
+}
+
+@container pane (max-width: 288px) {
+  .pane-head[data-head="sequence"] .zoom-step {
+    display: none;
+  }
+}
+@container pane (max-width: 225px) {
+  .pane-head[data-head="sequence"] .pane-tools {
+    display: none;
+  }
 }
 
 /* --------------------------------------------------- outcomes & coverage */
@@ -1027,17 +1121,10 @@ polygon.arch-edge.dim {
 }
 
 .dock-tab {
-  padding: 0 12px;
-  border: none;
+  display: flex;
+  align-items: stretch;
   border-right: 1px solid var(--border);
-  background: transparent;
   color: var(--text-faint);
-  font: inherit;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  cursor: pointer;
   transition: background 120ms, color 120ms;
 }
 .dock-tab:hover {
@@ -1048,6 +1135,42 @@ polygon.arch-edge.dim {
   background: var(--surface-0);
   color: var(--text);
   box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.dock-tab-label {
+  padding: 0 4px 0 12px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* Shown on the active tab and on hover, the way an editor's tabs behave —
+   always there to be clicked, only drawn when it is likely to be wanted. */
+.dock-tab-close {
+  padding: 0 8px 0 4px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+}
+.dock-tab.active .dock-tab-close,
+.dock-tab:hover .dock-tab-close,
+.dock-tab-close:focus-visible {
+  opacity: 0.6;
+}
+.dock-tab-close:hover {
+  opacity: 1;
 }
 
 /* A tabbed slot draws its own strip, so the pane below it needs no second one. */
@@ -1273,39 +1396,6 @@ polygon.arch-edge.dim {
   display: flex;
   flex-direction: column;
   min-height: 0;
-}
-
-.inspector-head {
-  flex-direction: column;
-  padding: 8px 0;
-  gap: 6px;
-}
-.inspector.collapsed .inspector-head h2 {
-  writing-mode: vertical-rl;
-  font-size: 10.5px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-  flex: none;
-}
-
-.inspector-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 12px;
-  border-bottom: 1px solid var(--border);
-  flex: none;
-}
-.inspector-head h2 {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 620;
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .inspector-body {
