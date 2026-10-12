@@ -8,11 +8,15 @@ import { isBackgroundTab, paneIds, usePanels } from '../state/panels'
  * The list is the open project's four documents plus the inspector, in
  * canonical order — `slotOrder` rather than a constant, because which documents
  * exist depends on which project is open.
+ *
+ * A row means `reach`, the same as its ⌘ key: a pane behind another tab comes
+ * forward rather than closing, which is what someone clicking a half-filled
+ * mark is asking for.
  */
 export function ViewMenu() {
   const root = usePanels((s) => s.root)
   const projectId = usePanels((s) => s.projectId)
-  const toggle = usePanels((s) => s.toggle)
+  const reach = usePanels((s) => s.reach)
   const resetLayout = usePanels((s) => s.resetLayout)
   const minimap = usePanels((s) => s.minimap)
   const toggleMinimap = usePanels((s) => s.toggleMinimap)
@@ -50,7 +54,7 @@ export function ViewMenu() {
               <button
                 key={id}
                 onClick={() => {
-                  toggle(id)
+                  reach(id)
                   setOpen(false)
                 }}
                 disabled={last}
@@ -58,8 +62,10 @@ export function ViewMenu() {
                   last
                     ? 'This is the only panel left open'
                     : behind
-                      ? 'Open, behind another tab in its slot'
-                      : undefined
+                      ? 'Open behind another tab — click to bring it forward'
+                      : on
+                        ? 'Click to close'
+                        : 'Click to open'
                 }
               >
                 {/* Three states, not two: a pane can be open but tabbed behind

@@ -26,6 +26,7 @@ import { messageLine } from '../dsl/serializer'
 import { buildTree, siblingRun, type SiblingRun } from '../dsl/tree'
 import { draftContract } from '../contracts/contractStore'
 import { KIND_LABEL } from '../render/aws-icons/labels'
+import type { ViewKind } from '../state/docId'
 import type { Selection } from '../state/store'
 import type { MenuSection } from './useContextMenu'
 
@@ -45,6 +46,8 @@ export interface MenuDeps {
   /** The shift-click range, when one is active and legal. */
   range: (SiblingRun & { anchorId: string }) | null
   copy: (text: string, what: string) => void
+  /** Open a view of the open project, or bring it forward. Never closes one. */
+  openView: (view: ViewKind) => void
 }
 
 const STYLES: { value: MessageStyle; label: string; arrow: string }[] = [
@@ -353,7 +356,10 @@ export function participantMenu(
                 id: 'reveal',
                 label: 'Reveal in sequence',
                 hint: `${touching.length} interaction${touching.length === 1 ? '' : 's'}`,
-                onSelect: () => select({ type: 'message', id: touching[0].id }),
+                onSelect: () => {
+                  deps.openView('sequence')
+                  select({ type: 'message', id: touching[0].id })
+                },
               },
             ]
           : []),
@@ -544,7 +550,10 @@ export function archEdgeMenu(deps: MenuDeps, from: string, to: string): MenuSect
           id: 'reveal',
           label: 'Reveal in sequence',
           hint: `${messages.length} interaction${messages.length === 1 ? '' : 's'}`,
-          onSelect: () => select({ type: 'message', id: messages[0].id }),
+          onSelect: () => {
+            deps.openView('sequence')
+            select({ type: 'message', id: messages[0].id })
+          },
         },
       ],
     },

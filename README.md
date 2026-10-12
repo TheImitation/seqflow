@@ -384,11 +384,19 @@ Keyboard: <kbd>space</kbd> play/pause, <kbd>←</kbd>/<kbd>→</kbd> step,
 
 ## Panels
 
-Every panel opens and closes, VS Code style. Each pane head carries a `‹` that
-folds the pane into a 30 px rail on the workspace edge, and clicking the rail
-brings it back; a file's row in the explorer carries a `×` that does the same
-thing. The **View** menu lists every panel with its state, toggles the explorer
-and the minimap, and **Reset layout** restores the defaults.
+Every panel opens and closes, VS Code style, and closing is one action with one
+glyph wherever you find it: the `×` at the far end of a pane head, on a tab, or
+on a file's row in the explorer. A closed pane leaves a 30 px rail on the right
+edge and clicking the rail brings it back where it was; the explorer has its own
+`×` and leaves its rail on the left. The **View** menu lists every panel with its
+state, toggles the explorer and the minimap, and **Reset layout** restores the
+defaults.
+
+A pane head never loses its `×`. As a pane narrows the head sheds its tools,
+least useful first — the layout picker, then zoom's `−` and `+`, then the rest —
+and widening it brings them straight back. Each head's thresholds are measured
+from what it holds (`styles.css`, *Shedding*), so a narrow Schema keeps its zoom
+at widths where Architecture, which carries more, has already let go of it.
 
 <kbd>⌘1</kbd> DSL · <kbd>⌘2</kbd> Sequence · <kbd>⌘3</kbd> Architecture ·
 <kbd>⌘4</kbd> Schema · <kbd>⌘B</kbd> Inspector. A key names a *view* — "the
@@ -552,7 +560,9 @@ way back only in a menu.
 `⌘1`–`⌘4` and `⌘B` reach a panel rather than blindly toggling it: a closed pane
 opens, a pane hidden behind another tab comes to the front, and only a pane that
 is already showing closes — and not even then if the caret is inside it, since
-these shortcuts deliberately fire while you are typing.
+these shortcuts deliberately fire while you are typing. A View menu row means the
+same thing (`usePanels.reach`), and **Reveal in sequence** opens the sequence
+before selecting in it rather than selecting into a closed pane.
 
 Two implementation notes worth knowing:
 

@@ -6,7 +6,7 @@ import { viewSection } from '../components/menus'
 import { ZoomControl } from '../components/ZoomControl'
 import { LayoutControl } from '../components/LayoutControl'
 import { useZoom } from '../components/useZoom'
-import { PaneHideButton } from '../components/PaneRail'
+import { PaneCloseButton } from '../components/PaneRail'
 import { usePanels } from '../state/panels'
 import { MODE_LABEL } from '../state/viewLayout'
 import { Minimap } from './Minimap'
@@ -118,23 +118,25 @@ export function SchemaCanvas({ style }: { style?: React.CSSProperties }) {
   })
 
   const head = (
-    <div className="pane-head">
-      Schema
+    <div className="pane-head" data-head="schema">
+      <span className="pane-title">Schema</span>
       <span className="spacer" />
-      <LayoutControl
-        mode={graph.mode}
-        setMode={graph.setMode}
-        sticky={graph.sticky}
-        stickyApplies={graph.stickyApplies}
-        toggleSticky={graph.toggleSticky}
-        reorganise={graph.reorganise}
-        direction={direction}
-        setDirection={setDirection}
-        hasPins={graph.pinned.size > 0}
-        settling={graph.settling}
-      />
-      <ZoomControl zoom={zoom} />
-      <PaneHideButton id="schema" />
+      <div className="pane-tools">
+        <LayoutControl
+          mode={graph.mode}
+          setMode={graph.setMode}
+          sticky={graph.sticky}
+          stickyApplies={graph.stickyApplies}
+          toggleSticky={graph.toggleSticky}
+          reorganise={graph.reorganise}
+          direction={direction}
+          setDirection={setDirection}
+          hasPins={graph.pinned.size > 0}
+          settling={graph.settling}
+        />
+        <ZoomControl zoom={zoom} />
+      </div>
+      <PaneCloseButton view="schema" />
     </div>
   )
 

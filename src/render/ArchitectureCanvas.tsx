@@ -14,7 +14,7 @@ import { ZoomControl } from '../components/ZoomControl'
 import { LayoutControl } from '../components/LayoutControl'
 import { useZoom } from '../components/useZoom'
 import { usePlaybackEngine } from '../playback/usePlayback'
-import { PaneHideButton } from '../components/PaneRail'
+import { PaneCloseButton } from '../components/PaneRail'
 import { usePanels } from '../state/panels'
 import { Minimap } from './Minimap'
 import { useStore } from '../state/store'
@@ -181,29 +181,31 @@ export function ArchitectureCanvas({
   })
 
   const head = (
-    <div className="pane-head">
-      Architecture
+    <div className="pane-head" data-head="arch">
+      <span className="pane-title">Architecture</span>
       <span
-        style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 500 }}
+        className="pane-sub"
         title="Nodes and links are derived from the sequence on every change"
       >
         inferred
       </span>
       <span className="spacer" />
-      <LayoutControl
-        mode={graph.mode}
-        setMode={graph.setMode}
-        sticky={graph.sticky}
-        stickyApplies={graph.stickyApplies}
-        toggleSticky={graph.toggleSticky}
-        reorganise={graph.reorganise}
-        direction={direction}
-        setDirection={setDirection}
-        hasPins={graph.pinned.size > 0}
-        settling={graph.settling}
-      />
-      <ZoomControl zoom={zoom} />
-      <PaneHideButton id="arch" />
+      <div className="pane-tools">
+        <LayoutControl
+          mode={graph.mode}
+          setMode={graph.setMode}
+          sticky={graph.sticky}
+          stickyApplies={graph.stickyApplies}
+          toggleSticky={graph.toggleSticky}
+          reorganise={graph.reorganise}
+          direction={direction}
+          setDirection={setDirection}
+          hasPins={graph.pinned.size > 0}
+          settling={graph.settling}
+        />
+        <ZoomControl zoom={zoom} />
+      </div>
+      <PaneCloseButton view="arch" />
     </div>
   )
 

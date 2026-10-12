@@ -71,6 +71,7 @@ function harness(src = SRC) {
     playFrom: vi.fn(),
     setBranchChoice: vi.fn(),
     suggestFor: vi.fn(),
+    openView: vi.fn(),
     range: null,
   }
 
@@ -298,6 +299,19 @@ describe('participant menu', () => {
     )
     const withReveal = participantMenu(h.deps, 'APIGW', { reveal: true })
     expect(find(withReveal, 'Reveal in sequence').hint).toBe('5 interactions')
+  })
+
+  it('opens the sequence when revealing in it, rather than only selecting', () => {
+    // Selecting alone does nothing you can see while the sequence is closed or
+    // behind another tab, which made the item look broken.
+    const h = harness()
+    find(participantMenu(h.deps, 'APIGW', { reveal: true }), 'Reveal in sequence').onSelect!()
+    expect(h.deps.openView).toHaveBeenCalledWith('sequence')
+    expect(h.selected.at(-1)).toMatchObject({ type: 'message' })
+
+    const edge = harness()
+    find(archEdgeMenu(edge.deps, 'Client', 'APIGW'), 'Reveal in sequence').onSelect!()
+    expect(edge.deps.openView).toHaveBeenCalledWith('sequence')
   })
 })
 

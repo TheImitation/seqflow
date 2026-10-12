@@ -119,6 +119,51 @@ describe('tabs', () => {
   })
 })
 
+/**
+ * `reach` is what the ⌘ keys and the View menu both mean. The case that broke
+ * when it was a toggle: a pane open but behind another tab, which a press meant
+ * to look at it would close.
+ */
+describe('reach', () => {
+  beforeEach(reset)
+  const reach = (id: SlotId) => usePanels.getState().reach(id)
+
+  it('opens a closed pane', () => {
+    usePanels.getState().hide(schema)
+    reach(schema)
+    expect(paneIds(root())).toContain(schema)
+  })
+
+  it('brings a background tab forward instead of closing it', () => {
+    usePanels.getState().dockPane(schema, findPane(root(), arch)!.path, 'center')
+    expect(isBackgroundTab(root(), arch)).toBe(true)
+
+    reach(arch)
+    expect(paneIds(root())).toContain(arch)
+    expect(isBackgroundTab(root(), arch)).toBe(false)
+  })
+
+  it('closes a pane that is already showing', () => {
+    reach(sequence)
+    expect(paneIds(root())).not.toContain(sequence)
+    expect(usePanels.getState().closed.map((c) => c.pane)).toContain(sequence)
+  })
+
+  it('reaches the inspector the same way as a document', () => {
+    reach(inspector)
+    expect(paneIds(root())).not.toContain(inspector)
+    reach(inspector)
+    expect(paneIds(root())).toContain(inspector)
+  })
+
+  it('still refuses to close the last pane', () => {
+    for (const id of slotOrder(P).slice(1)) usePanels.getState().hide(id)
+    expect(paneIds(root())).toEqual([editor])
+    reach(editor)
+    expect(paneIds(root())).toEqual([editor])
+  })
+})
+
 describe('docking', () => {
   beforeEach(reset)
 

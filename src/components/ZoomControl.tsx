@@ -4,7 +4,7 @@ export function ZoomControl({ zoom }: { zoom: ReturnType<typeof useZoom> }) {
   return (
     <>
       <button
-        className="btn ghost sm"
+        className="btn ghost sm zoom-step"
         onClick={zoom.zoomOut}
         title="Zoom out"
         aria-label="Zoom out"
@@ -20,7 +20,7 @@ export function ZoomControl({ zoom }: { zoom: ReturnType<typeof useZoom> }) {
         {Math.round(zoom.scale * 100)}%
       </button>
       <button
-        className="btn ghost sm"
+        className="btn ghost sm zoom-step"
         onClick={zoom.zoomIn}
         title="Zoom in"
         aria-label="Zoom in"

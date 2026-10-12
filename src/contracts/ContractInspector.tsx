@@ -30,11 +30,11 @@ import {
   renameParticipant,
 } from '../dsl/edit'
 import { DraftField } from '../components/DraftField'
+import { PaneCloseButton } from '../components/PaneRail'
 import { useDismiss } from '../components/useDismiss'
 import { validateContractName, validateParticipantId } from '../dsl/validate'
 import { KindIcon } from '../render/aws-icons'
 import { KIND_LABEL } from '../render/aws-icons/labels'
-import { usePanels } from '../state/panels'
 import { useStore, type Selection } from '../state/store'
 import {
   TRANSPORTS,
@@ -57,30 +57,28 @@ import { HEADER_PRESETS, HTTP_METHODS, STATUS_BY_CODE, STATUS_CODES } from './un
 export function ContractInspector() {
   const selection = useStore((s) => s.selection)
   const select = useStore((s) => s.select)
-  const hidePanel = usePanels((s) => s.hide)
 
   return (
     <aside className="inspector">
-      <div className="inspector-head">
-        <button
-          className="btn ghost icon"
-          onClick={() => hidePanel('inspector')}
-          aria-label="Hide the inspector"
-          title="Hide the inspector (⌘B)"
-        >
-          ›
-        </button>
-        <h2>{titleFor(selection)}</h2>
+      {/* A `.pane-head` like every other pane's, which is what makes the
+          inspector draggable: the dock starts a drag from that class, and the
+          old `.inspector-head` was the one header it never matched. It also
+          puts the close control where every other pane has it, and leaves "clear
+          selection" as a word rather than a second ×. */}
+      <div className="pane-head">
+        <span className="pane-title">Inspector</span>
+        {selection && <span className="pane-sub">{titleFor(selection)}</span>}
+        <span className="spacer" />
         {selection && (
           <button
-            className="btn ghost icon"
+            className="btn ghost sm"
             onClick={() => select(null)}
-            aria-label="Clear selection"
             title="Clear selection (esc)"
           >
-            ✕
+            Clear
           </button>
         )}
+        <PaneCloseButton view="inspector" />
       </div>
       <div className="inspector-body">
         <Body />
@@ -89,8 +87,7 @@ export function ContractInspector() {
   )
 }
 
-function titleFor(selection: Selection | null): string {
-  if (!selection) return 'Inspector'
+function titleFor(selection: Selection): string {
   switch (selection.type) {
     case 'message':
       return 'Interaction'
